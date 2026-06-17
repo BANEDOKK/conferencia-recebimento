@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Conferência Eletro</title>
+  <!-- QR Code -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <!-- Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Seus estilos -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ========== NAVEGAÇÃO (visível apenas após login) ========== -->
+  <nav id="main-nav" style="display:none;">
+    <div class="brand">
+      <span class="ico">📦</span>
+      <div>Conferência Eletro<small>Recebimento de Mercadorias</small></div>
+    </div>
+    <div class="nav-links">
+      <a href="#" data-page="nova" class="ativo">➕ Nova Conferência</a>
+      <a href="#" data-page="lista">📋 Recebimentos</a>
+      <a href="#" data-page="produtos">🗂️ Produtos</a>
+      <a href="#" id="btn-sair">Sair</a>
+    </div>
+  </nav>
+
+  <div class="container">
+
+    <!-- ========== TELA DE LOGIN / CADASTRO ========== -->
+    <section id="page-login">
+      <div class="login-box">
+        <div class="logo">
+          <span class="ico">📦</span>
+          <h1>Conferência Eletro</h1>
+          <p>Recebimento de Mercadorias</p>
+        </div>
+
+        <!-- Formulário de Login -->
+        <form id="form-login">
+          <div id="login-erro" class="erro" style="display:none;"></div>
+          <label for="usuario-login">Usuário</label>
+          <input type="text" id="usuario-login" placeholder="Digite seu usuário" required />
+          <label for="senha">Senha</label>
+          <input type="password" id="senha" placeholder="••••••••" required />
+          <button type="submit" class="btn btn-azul btn-login">Entrar →</button>
+        </form>
+
+        <p style="text-align:center;margin-top:12px;">
+          <a href="#" id="link-cadastro" style="color:var(--azul-md);font-size:.9rem;">Criar conta</a>
+        </p>
+
+        <!-- Formulário de Cadastro (inicialmente oculto) -->
+        <form id="form-cadastro" style="display:none;margin-top:16px;">
+          <div id="cadastro-erro" class="erro" style="display:none;"></div>
+          <div id="cadastro-ok" class="flash ok" style="display:none;"></div>
+          <label for="usuario-cad">Usuário (ex: 12345)</label>
+          <input type="text" id="usuario-cad" placeholder="Digite seu usuário (números ou letras)" required />
+          <label for="senha-cad">Senha (mínimo 6 caracteres)</label>
+          <input type="password" id="senha-cad" placeholder="••••••••" required minlength="6" />
+          <button type="submit" class="btn btn-azul btn-login">📝 Cadastrar</button>
+          <p style="text-align:center;margin-top:10px;">
+            <a href="#" id="link-login" style="color:var(--azul-md);font-size:.9rem;">Já tenho conta → Login</a>
+          </p>
+        </form>
+
+        <p class="dica">Use usuário e senha cadastrados no sistema.</p>
+      </div>
+    </section>
+
+    <!-- ========== TELA: NOVA CONFERÊNCIA ========== -->
+    <section id="page-nova" style="display:none;">
+      <div class="page-titulo">📦 Nova Conferência de Recebimento</div>
+
+      <!-- Dados do Recebimento -->
+      <div class="card">
+        <div class="card-titulo">🏭 Dados do Recebimento</div>
+        <div class="form-row cols3">
+          <div class="fg">
+            <label>Fornecedor *</label>
+            <input type="text" id="fornecedor" placeholder="Nome do fornecedor..." autocomplete="off" />
+          </div>
+          <div class="fg">
+            <label>Nota Fiscal</label>
+            <input type="text" id="nota_fiscal" placeholder="Nº da NF..." autocomplete="off" />
+          </div>
+          <div class="fg">
+            <label>Observação</label>
+            <input type="text" id="observacao" placeholder="Ex: entrega parcial..." autocomplete="off" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Bipagem -->
+      <div class="card">
+        <div class="card-titulo">🔍 Bipar / Localizar Produto</div>
+
+        <div class="form-row cols4">
+          <div class="fg">
+            <label>Código de Barras (EAN/DUN)</label>
+            <div style="display:flex;gap:8px">
+              <input type="text" id="cod-barras" placeholder="Bipe ou digite o código..." autocomplete="off" maxlength="25" style="flex:1" />
+              <button class="btn btn-cinza btn-icon" id="btn-cam" title="Usar câmera">📷</button>
+            </div>
+          </div>
+          <div class="fg">
+            <label>Qtd. Esperada (NF)</label>
+            <input type="number" id="qtd-esperada" value="" min="0" step="1" placeholder="0" />
+          </div>
+          <div class="fg">
+            <label>Qtd. Recebida *</label>
+            <input type="number" id="qtd-recebida" value="1" min="0.001" step="0.001" />
+          </div>
+          <div class="fg">
+            <label>Unidade</label>
+            <select id="unidade">
+              <option value="UN">UN — Unidade</option>
+              <option value="CX">CX — Caixa</option>
+              <option value="PC">PC — Pacote</option>
+              <option value="KG">KG — Kg</option>
+              <option value="L">L — Litro</option>
+              <option value="FR">FR — Frasco</option>
+              <option value="LA">LA — Lata</option>
+              <option value="GF">GF — Garrafa</option>
+              <option value="BD">BD — Balde</option>
+              <option value="AM">AM — Amarrado</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Câmera -->
+        <div id="video-container" style="display:none;">
+          <div id="reader"></div>
+          <div style="text-align:center;padding:8px;background:#f2f4f7;">
+            <button class="btn btn-danger btn-sm" id="btn-fechar-cam">✕ Fechar câmera</button>
+          </div>
+        </div>
+
+        <!-- Resultado da busca -->
+        <div id="res-ok" class="resultado-card resultado-ok" style="display:none;">
+          <div class="resultado-label">✅ Produto encontrado na base</div>
+          <div class="resultado-desc" id="res-desc"></div>
+          <div style="font-size:.76rem;color:var(--texto-md);margin-top:4px" id="res-meta"></div>
+        </div>
+        <div id="res-not" class="resultado-card resultado-not" style="display:none;">
+          <div class="resultado-label">⚠️ Produto não encontrado — preencha a descrição abaixo</div>
+        </div>
+
+        <!-- Descrição -->
+        <div class="fg">
+          <label>Descrição do Produto *</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="descricao" placeholder="Preenchida automaticamente ao bipar, ou digite manualmente" style="flex:1" autocomplete="off" />
+            <button class="btn btn-azul" id="btn-add">+ Adicionar</button>
+          </div>
+        </div>
+
+        <input type="hidden" id="h-seqproduto" />
+        <input type="hidden" id="h-codacesso" />
+      </div>
+
+      <!-- Lista de itens -->
+      <div class="card" id="card-itens" style="display:none;">
+        <div class="card-titulo" style="justify-content:space-between;">
+          <span>📋 Itens Conferidos</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="badge-total" class="badge badge-azul"></span>
+            <span id="badge-div" class="badge badge-vermelho" style="display:none;"></span>
+          </div>
+        </div>
+        <div class="lista-itens" id="lista-itens"></div>
+        <div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+          <button class="btn btn-cinza" id="btn-limpar">🗑️ Limpar</button>
+          <button class="btn btn-azul" id="btn-salvar">💾 Finalizar Conferência</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== TELA: LISTA DE RECEBIMENTOS ========== -->
+    <section id="page-lista" style="display:none;">
+      <div class="page-titulo">📋 Recebimentos Realizados</div>
+      <div id="lista-recebimentos"></div>
+    </section>
+
+    <!-- ========== TELA: PRODUTOS (importação) ========== -->
+    <section id="page-produtos" style="display:none;">
+      <div class="page-titulo">🗂️ Base de Produtos</div>
+      <div class="card">
+        <div class="card-titulo">📤 Importar CSV</div>
+        <form id="form-importar" enctype="multipart/form-data">
+          <div class="fg">
+            <label>Arquivo CSV (separador ; )</label>
+            <input type="file" id="file-csv" accept=".csv" required />
+          </div>
+          <button type="submit" class="btn btn-azul">⬆️ Importar</button>
+        </form>
+        <div id="import-status" style="margin-top:12px;"></div>
+        <p style="margin-top:16px;color:var(--texto-md);font-size:.85rem;">
+          Total de produtos cadastrados: <strong id="total-produtos">0</strong>
+        </p>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ========== MODAL DE SUCESSO ========== -->
+  <div class="modal-bg" id="modal-ok">
+    <div class="modal" style="max-width:400px;text-align:center;">
+      <div style="font-size:3rem;margin-bottom:10px;">✅</div>
+      <div class="modal-titulo" style="justify-content:center;">Conferência Salva!</div>
+      <p style="color:var(--texto-md);margin-bottom:6px;" id="modal-resumo"></p>
+      <p style="color:var(--cinza-esc);font-size:.85rem;" id="modal-div-msg"></p>
+      <div class="modal-footer" style="justify-content:center;margin-top:20px;">
+        <button class="btn btn-azul" id="btn-nova-conf">➕ Nova Conferência</button>
+        <button class="btn btn-cinza" id="btn-ver-lista">📋 Ver Recebimentos</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== MODAL DE DETALHE / EDIÇÃO ========== -->
+  <div class="modal-bg" id="modal-detalhe">
+    <div class="modal">
+      <div class="modal-titulo">📄 Detalhes do Recebimento</div>
+      <div id="detalhe-conteudo"></div>
+      <div class="modal-footer">
+        <button class="btn btn-danger" id="btn-excluir">🗑️ Excluir</button>
+        <button class="btn btn-cinza" id="btn-fechar-detalhe">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="supabase.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
