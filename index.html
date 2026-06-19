@@ -4,16 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Conferência Eletro</title>
-  <!-- QR Code -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
-  <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- Seus estilos -->
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-  <!-- ========== NAVEGAÇÃO (visível apenas após login) ========== -->
   <nav id="main-nav" style="display:none;">
     <div class="brand">
       <span class="ico">📦</span>
@@ -29,7 +25,7 @@
 
   <div class="container">
 
-    <!-- ========== TELA DE LOGIN / CADASTRO ========== -->
+    <!-- TELA DE LOGIN -->
     <section id="page-login">
       <div class="login-box">
         <div class="logo">
@@ -37,27 +33,22 @@
           <h1>Conferência Eletro</h1>
           <p>Recebimento de Mercadorias</p>
         </div>
-
-        <!-- Formulário de Login -->
         <form id="form-login">
           <div id="login-erro" class="erro" style="display:none;"></div>
-          <label for="usuario-login">Usuário</label>
-          <input type="text" id="usuario-login" placeholder="Digite seu usuário" required />
+          <label for="email">Usuário</label>
+          <input type="text" id="email" placeholder="seu usuário" required />
           <label for="senha">Senha</label>
           <input type="password" id="senha" placeholder="••••••••" required />
           <button type="submit" class="btn btn-azul btn-login">Entrar →</button>
         </form>
-
         <p style="text-align:center;margin-top:12px;">
           <a href="#" id="link-cadastro" style="color:var(--azul-md);font-size:.9rem;">Criar conta</a>
         </p>
-
-        <!-- Formulário de Cadastro (inicialmente oculto) -->
         <form id="form-cadastro" style="display:none;margin-top:16px;">
           <div id="cadastro-erro" class="erro" style="display:none;"></div>
           <div id="cadastro-ok" class="flash ok" style="display:none;"></div>
-          <label for="usuario-cad">Usuário (ex: 12345)</label>
-          <input type="text" id="usuario-cad" placeholder="Digite seu usuário (números ou letras)" required />
+          <label for="email-cad">Usuário</label>
+          <input type="text" id="email-cad" placeholder="seu usuario" required />
           <label for="senha-cad">Senha (mínimo 6 caracteres)</label>
           <input type="password" id="senha-cad" placeholder="••••••••" required minlength="6" />
           <button type="submit" class="btn btn-azul btn-login">📝 Cadastrar</button>
@@ -65,39 +56,30 @@
             <a href="#" id="link-login" style="color:var(--azul-md);font-size:.9rem;">Já tenho conta → Login</a>
           </p>
         </form>
-
-        <p class="dica">Use usuário e senha cadastrados no sistema.</p>
+        <p class="dica">Use e‑mail e senha cadastrados no sistema.</p>
       </div>
     </section>
 
-    <!-- ========== TELA: NOVA CONFERÊNCIA ========== -->
+    <!-- TELA: NOVA CONFERÊNCIA -->
     <section id="page-nova" style="display:none;">
       <div class="page-titulo">📦 Nova Conferência de Recebimento</div>
 
-      <!-- Dados do Recebimento -->
+      <!-- Dados do Recebimento (apenas LOJA) -->
       <div class="card">
         <div class="card-titulo">🏭 Dados do Recebimento</div>
-        <div class="form-row cols3">
+        <div class="form-row">
           <div class="fg">
-            <label>Fornecedor *</label>
-            <input type="text" id="fornecedor" placeholder="Nome do fornecedor..." autocomplete="off" />
-          </div>
-          <div class="fg">
-            <label>Nota Fiscal</label>
-            <input type="text" id="nota_fiscal" placeholder="Nº da NF..." autocomplete="off" />
-          </div>
-          <div class="fg">
-            <label>Observação</label>
-            <input type="text" id="observacao" placeholder="Ex: entrega parcial..." autocomplete="off" />
+            <label>LOJA *</label>
+            <input type="text" id="fornecedor" placeholder="Número ou nome da loja..." autocomplete="off" />
           </div>
         </div>
       </div>
 
-      <!-- Bipagem -->
+      <!-- Bipagem (sem Qtd Esperada e sem Unidade) -->
       <div class="card">
         <div class="card-titulo">🔍 Bipar / Localizar Produto</div>
 
-        <div class="form-row cols4">
+        <div class="form-row cols2">
           <div class="fg">
             <label>Código de Barras (EAN/DUN)</label>
             <div style="display:flex;gap:8px">
@@ -106,31 +88,11 @@
             </div>
           </div>
           <div class="fg">
-            <label>Qtd. Esperada (NF)</label>
-            <input type="number" id="qtd-esperada" value="" min="0" step="1" placeholder="0" />
-          </div>
-          <div class="fg">
             <label>Qtd. Recebida *</label>
             <input type="number" id="qtd-recebida" value="1" min="0.001" step="0.001" />
           </div>
-          <div class="fg">
-            <label>Unidade</label>
-            <select id="unidade">
-              <option value="UN">UN — Unidade</option>
-              <option value="CX">CX — Caixa</option>
-              <option value="PC">PC — Pacote</option>
-              <option value="KG">KG — Kg</option>
-              <option value="L">L — Litro</option>
-              <option value="FR">FR — Frasco</option>
-              <option value="LA">LA — Lata</option>
-              <option value="GF">GF — Garrafa</option>
-              <option value="BD">BD — Balde</option>
-              <option value="AM">AM — Amarrado</option>
-            </select>
-          </div>
         </div>
 
-        <!-- Câmera -->
         <div id="video-container" style="display:none;">
           <div id="reader"></div>
           <div style="text-align:center;padding:8px;background:#f2f4f7;">
@@ -138,7 +100,7 @@
           </div>
         </div>
 
-        <!-- Resultado da busca -->
+        <!-- Resultado da busca (sem nomerazao) -->
         <div id="res-ok" class="resultado-card resultado-ok" style="display:none;">
           <div class="resultado-label">✅ Produto encontrado na base</div>
           <div class="resultado-desc" id="res-desc"></div>
@@ -148,7 +110,6 @@
           <div class="resultado-label">⚠️ Produto não encontrado — preencha a descrição abaixo</div>
         </div>
 
-        <!-- Descrição -->
         <div class="fg">
           <label>Descrição do Produto *</label>
           <div style="display:flex;gap:8px">
@@ -159,15 +120,15 @@
 
         <input type="hidden" id="h-seqproduto" />
         <input type="hidden" id="h-codacesso" />
+        <input type="hidden" id="h-unidade" />
       </div>
 
-      <!-- Lista de itens -->
+      <!-- Lista de itens (sem divergência e sem qtd esperada) -->
       <div class="card" id="card-itens" style="display:none;">
         <div class="card-titulo" style="justify-content:space-between;">
           <span>📋 Itens Conferidos</span>
           <div style="display:flex;gap:8px;align-items:center;">
             <span id="badge-total" class="badge badge-azul"></span>
-            <span id="badge-div" class="badge badge-vermelho" style="display:none;"></span>
           </div>
         </div>
         <div class="lista-itens" id="lista-itens"></div>
@@ -178,13 +139,13 @@
       </div>
     </section>
 
-    <!-- ========== TELA: LISTA DE RECEBIMENTOS ========== -->
+    <!-- TELA: LISTA DE RECEBIMENTOS (sem NF e Observação) -->
     <section id="page-lista" style="display:none;">
       <div class="page-titulo">📋 Recebimentos Realizados</div>
       <div id="lista-recebimentos"></div>
     </section>
 
-    <!-- ========== TELA: PRODUTOS (importação) ========== -->
+    <!-- TELA: PRODUTOS (importação CSV) -->
     <section id="page-produtos" style="display:none;">
       <div class="page-titulo">🗂️ Base de Produtos</div>
       <div class="card">
@@ -205,13 +166,12 @@
 
   </div>
 
-  <!-- ========== MODAL DE SUCESSO ========== -->
+  <!-- MODAL SUCESSO -->
   <div class="modal-bg" id="modal-ok">
     <div class="modal" style="max-width:400px;text-align:center;">
       <div style="font-size:3rem;margin-bottom:10px;">✅</div>
       <div class="modal-titulo" style="justify-content:center;">Conferência Salva!</div>
       <p style="color:var(--texto-md);margin-bottom:6px;" id="modal-resumo"></p>
-      <p style="color:var(--cinza-esc);font-size:.85rem;" id="modal-div-msg"></p>
       <div class="modal-footer" style="justify-content:center;margin-top:20px;">
         <button class="btn btn-azul" id="btn-nova-conf">➕ Nova Conferência</button>
         <button class="btn btn-cinza" id="btn-ver-lista">📋 Ver Recebimentos</button>
@@ -219,7 +179,7 @@
     </div>
   </div>
 
-  <!-- ========== MODAL DE DETALHE / EDIÇÃO ========== -->
+  <!-- MODAL DETALHE (sem NF e Observação) -->
   <div class="modal-bg" id="modal-detalhe">
     <div class="modal">
       <div class="modal-titulo">📄 Detalhes do Recebimento</div>
