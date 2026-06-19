@@ -1,7 +1,5 @@
 // ============================================================
 //  SCRIPT PRINCIPAL – SPA Conferência Eletro (Supabase)
-//  Versão simplificada: LOJA, sem NF/Obs, sem Qtd Esperada e Unidade manual
-//  Com correção de tipo para IDs (números)
 // ============================================================
 
 // --- Estado global ---
@@ -177,7 +175,7 @@ function highlight(id) {
 }
 
 // ============================================================
-//  BUSCA DE PRODUTOS (sem nomerazao)
+//  BUSCA DE PRODUTOS
 // ============================================================
 const inputCodBarras = $('cod-barras');
 const resOk = $('res-ok');
@@ -506,7 +504,7 @@ $('btn-ver-lista').addEventListener('click', () => {
 });
 
 // ============================================================
-//  LISTA DE RECEBIMENTOS (com delegação de eventos)
+//  LISTA DE RECEBIMENTOS (APENAS RENDERIZAÇÃO)
 // ============================================================
 async function carregarRecebimentos() {
   const container = $('lista-recebimentos');
@@ -553,16 +551,20 @@ async function carregarRecebimentos() {
   });
   html += '</tbody></table></div>';
   container.innerHTML = html;
+}
 
-  // --- Delegação de eventos ---
+// ============================================================
+//  DELEGAÇÃO DE EVENTOS PARA A LISTA (executado uma única vez)
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+  const container = $('lista-recebimentos');
+  if (!container) return;
+
   container.addEventListener('click', function(e) {
     const btn = e.target.closest('button[data-acao]');
     if (!btn) return;
-    const id = parseInt(btn.dataset.id, 10);
+    const id = parseInt(btn.dataset.id);
     if (isNaN(id)) return;
-
-    // Log para depuração
-    console.log(`Ação: ${btn.dataset.acao}, ID: ${id}`);
 
     switch (btn.dataset.acao) {
       case 'ver':
@@ -576,37 +578,24 @@ async function carregarRecebimentos() {
         break;
     }
   });
-}
+});
 
 // ============================================================
-//  VER DETALHE (com conversão explícita para número)
+//  VER DETALHE
 // ============================================================
 async function verRecebimento(id) {
-  // Garantir que id seja número
-  const numericId = Number(id);
-  if (isNaN(numericId)) {
-    alert('ID inválido.');
-    return;
-  }
-
   const { data: rec, error: e1 } = await supabase
     .from('recebimentos')
     .select('*')
-    .eq('id', numericId)
+    .eq('id', id)
     .single();
-  if (e1) {
-    alert('Erro ao buscar recebimento: ' + e1.message);
-    return;
-  }
+  if (e1) { alert('Erro ao buscar recebimento: ' + e1.message); return; }
 
   const { data: itensDB, error: e2 } = await supabase
     .from('itens_recebimento')
     .select('*')
-    .eq('recebimento_id', numericId);
-  if (e2) {
-    alert('Erro ao buscar itens: ' + e2.message);
-    return;
-  }
+    .eq('recebimento_id', id);
+  if (e2) { alert('Erro ao buscar itens: ' + e2.message); return; }
 
   let html = `
     <p><strong>Loja:</strong> ${rec.fornecedor}</p>
@@ -615,48 +604,40 @@ async function verRecebimento(id) {
     <h4>Itens (${itensDB.length})</h4>
     <ul style="list-style:none;padding:0;">
   `;
-  itensDB.forEach(it => {
-    html += `
-      <li style="padding:6px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;">
-        <span>${it.descricao} (${it.unidade})</span>
-        <span style="font-weight:700;">${fmt(it.qtd_recebida)}</span>
-      </li>
-    `;
-  });
+  if (!itensDB || itensDB.length === 0) {
+    html += '<li style="padding:6px 0;color:var(--cinza-esc);">Nenhum item encontrado para este recebimento.</li>';
+  } else {
+    itensDB.forEach(it => {
+      html += `
+        <li style="padding:6px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;">
+          <span>${it.descricao} (${it.unidade})</span>
+          <span style="font-weight:700;">${fmt(it.qtd_recebida)}</span>
+        </li>
+      `;
+    });
+  }
   html += '</ul>';
   $('detalhe-conteudo').innerHTML = html;
   $('modal-detalhe').classList.add('aberto');
-  $('modal-detalhe').dataset.recId = numericId;
+  $('modal-detalhe').dataset.recId = id;
 }
 
 // ============================================================
-//  EDITAR RECEBIMENTO (com conversão explícita para número)
+//  EDITAR RECEBIMENTO
 // ============================================================
 function editarRecebimento(id) {
-  const numericId = Number(id);
-  if (isNaN(numericId)) {
-    alert('ID inválido.');
-    return;
-  }
-
   (async () => {
     const { data: rec, error: e1 } = await supabase
       .from('recebimentos')
       .select('*')
-      .eq('id', numericId)
+      .eq('id', id)
       .single();
-    if (e1) {
-      alert('Erro: ' + e1.message);
-      return;
-    }
+    if (e1) { alert('Erro ao buscar recebimento: ' + e1.message); return; }
     const { data: itensDB, error: e2 } = await supabase
       .from('itens_recebimento')
       .select('*')
-      .eq('recebimento_id', numericId);
-    if (e2) {
-      alert('Erro: ' + e2.message);
-      return;
-    }
+      .eq('recebimento_id', id);
+    if (e2) { alert('Erro ao buscar itens: ' + e2.message); return; }
 
     $('fornecedor').value = rec.fornecedor;
     itens.length = 0;
@@ -672,28 +653,22 @@ function editarRecebimento(id) {
       });
     });
     renderLista();
-    recebimentoEmEdicao = numericId;
+    recebimentoEmEdicao = id;
     navegarPara('nova');
     $('btn-salvar').textContent = '💾 Atualizar Conferência';
   })();
 }
 
 // ============================================================
-//  EXCLUIR RECEBIMENTO (com conversão explícita para número)
+//  EXCLUIR RECEBIMENTO
 // ============================================================
 async function excluirRecebimento(id) {
-  const numericId = Number(id);
-  if (isNaN(numericId)) {
-    alert('ID inválido.');
-    return;
-  }
-
   if (!confirm('Tem certeza que deseja excluir este recebimento?')) return;
   try {
     const { error } = await supabase
       .from('recebimentos')
       .delete()
-      .eq('id', numericId);
+      .eq('id', id);
     if (error) throw error;
     alert('Recebimento excluído.');
     carregarRecebimentos();
@@ -703,7 +678,7 @@ async function excluirRecebimento(id) {
 }
 
 $('btn-excluir').addEventListener('click', () => {
-  const id = parseInt($('modal-detalhe').dataset.recId, 10);
+  const id = parseInt($('modal-detalhe').dataset.recId);
   if (id) {
     $('modal-detalhe').classList.remove('aberto');
     excluirRecebimento(id);
