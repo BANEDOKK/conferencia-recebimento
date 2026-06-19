@@ -1,7 +1,7 @@
 // ============================================================
 //  SCRIPT PRINCIPAL – SPA Conferência Eletro (Supabase)
 //  Versão simplificada: LOJA, sem NF/Obs, sem Qtd Esperada e Unidade manual
-//  Listagem de recebimentos sem a coluna ID
+//  Com correção de tipo para IDs (números)
 // ============================================================
 
 // --- Estado global ---
@@ -506,7 +506,7 @@ $('btn-ver-lista').addEventListener('click', () => {
 });
 
 // ============================================================
-//  LISTA DE RECEBIMENTOS (SEM A COLUNA ID)
+//  LISTA DE RECEBIMENTOS (com delegação de eventos)
 // ============================================================
 async function carregarRecebimentos() {
   const container = $('lista-recebimentos');
@@ -544,9 +544,9 @@ async function carregarRecebimentos() {
         <td><strong>${rec.fornecedor}</strong></td>
         <td>${dataFormatada}</td>
         <td style="text-align:center;white-space:nowrap;">
-          <button class="btn btn-sm btn-azul" data-ver="${rec.id}">👁️ Ver</button>
-          <button class="btn btn-sm btn-laranja" data-editar="${rec.id}">✏️ Editar</button>
-          <button class="btn btn-sm btn-danger" data-excluir="${rec.id}">🗑️</button>
+          <button class="btn btn-sm btn-azul" data-acao="ver" data-id="${rec.id}">👁️ Ver</button>
+          <button class="btn btn-sm btn-laranja" data-acao="editar" data-id="${rec.id}">✏️ Editar</button>
+          <button class="btn btn-sm btn-danger" data-acao="excluir" data-id="${rec.id}">🗑️</button>
         </td>
       </tr>
     `;
@@ -554,33 +554,59 @@ async function carregarRecebimentos() {
   html += '</tbody></table></div>';
   container.innerHTML = html;
 
-  container.querySelectorAll('[data-ver]').forEach(btn => {
-    btn.addEventListener('click', () => verRecebimento(parseInt(btn.dataset.ver)));
-  });
-  container.querySelectorAll('[data-editar]').forEach(btn => {
-    btn.addEventListener('click', () => editarRecebimento(parseInt(btn.dataset.editar)));
-  });
-  container.querySelectorAll('[data-excluir]').forEach(btn => {
-    btn.addEventListener('click', () => excluirRecebimento(parseInt(btn.dataset.excluir)));
+  // --- Delegação de eventos ---
+  container.addEventListener('click', function(e) {
+    const btn = e.target.closest('button[data-acao]');
+    if (!btn) return;
+    const id = parseInt(btn.dataset.id, 10);
+    if (isNaN(id)) return;
+
+    // Log para depuração
+    console.log(`Ação: ${btn.dataset.acao}, ID: ${id}`);
+
+    switch (btn.dataset.acao) {
+      case 'ver':
+        verRecebimento(id);
+        break;
+      case 'editar':
+        editarRecebimento(id);
+        break;
+      case 'excluir':
+        excluirRecebimento(id);
+        break;
+    }
   });
 }
 
 // ============================================================
-//  VER DETALHE (sem NF e Observação)
+//  VER DETALHE (com conversão explícita para número)
 // ============================================================
 async function verRecebimento(id) {
+  // Garantir que id seja número
+  const numericId = Number(id);
+  if (isNaN(numericId)) {
+    alert('ID inválido.');
+    return;
+  }
+
   const { data: rec, error: e1 } = await supabase
     .from('recebimentos')
     .select('*')
-    .eq('id', id)
+    .eq('id', numericId)
     .single();
-  if (e1) { alert('Erro: ' + e1.message); return; }
+  if (e1) {
+    alert('Erro ao buscar recebimento: ' + e1.message);
+    return;
+  }
 
   const { data: itensDB, error: e2 } = await supabase
     .from('itens_recebimento')
     .select('*')
-    .eq('recebimento_id', id);
-  if (e2) { alert('Erro: ' + e2.message); return; }
+    .eq('recebimento_id', numericId);
+  if (e2) {
+    alert('Erro ao buscar itens: ' + e2.message);
+    return;
+  }
 
   let html = `
     <p><strong>Loja:</strong> ${rec.fornecedor}</p>
@@ -600,25 +626,37 @@ async function verRecebimento(id) {
   html += '</ul>';
   $('detalhe-conteudo').innerHTML = html;
   $('modal-detalhe').classList.add('aberto');
-  $('modal-detalhe').dataset.recId = id;
+  $('modal-detalhe').dataset.recId = numericId;
 }
 
 // ============================================================
-//  EDITAR RECEBIMENTO
+//  EDITAR RECEBIMENTO (com conversão explícita para número)
 // ============================================================
 function editarRecebimento(id) {
+  const numericId = Number(id);
+  if (isNaN(numericId)) {
+    alert('ID inválido.');
+    return;
+  }
+
   (async () => {
     const { data: rec, error: e1 } = await supabase
       .from('recebimentos')
       .select('*')
-      .eq('id', id)
+      .eq('id', numericId)
       .single();
-    if (e1) { alert('Erro: ' + e1.message); return; }
+    if (e1) {
+      alert('Erro: ' + e1.message);
+      return;
+    }
     const { data: itensDB, error: e2 } = await supabase
       .from('itens_recebimento')
       .select('*')
-      .eq('recebimento_id', id);
-    if (e2) { alert('Erro: ' + e2.message); return; }
+      .eq('recebimento_id', numericId);
+    if (e2) {
+      alert('Erro: ' + e2.message);
+      return;
+    }
 
     $('fornecedor').value = rec.fornecedor;
     itens.length = 0;
@@ -634,22 +672,28 @@ function editarRecebimento(id) {
       });
     });
     renderLista();
-    recebimentoEmEdicao = id;
+    recebimentoEmEdicao = numericId;
     navegarPara('nova');
     $('btn-salvar').textContent = '💾 Atualizar Conferência';
   })();
 }
 
 // ============================================================
-//  EXCLUIR RECEBIMENTO
+//  EXCLUIR RECEBIMENTO (com conversão explícita para número)
 // ============================================================
 async function excluirRecebimento(id) {
+  const numericId = Number(id);
+  if (isNaN(numericId)) {
+    alert('ID inválido.');
+    return;
+  }
+
   if (!confirm('Tem certeza que deseja excluir este recebimento?')) return;
   try {
     const { error } = await supabase
       .from('recebimentos')
       .delete()
-      .eq('id', id);
+      .eq('id', numericId);
     if (error) throw error;
     alert('Recebimento excluído.');
     carregarRecebimentos();
@@ -659,7 +703,7 @@ async function excluirRecebimento(id) {
 }
 
 $('btn-excluir').addEventListener('click', () => {
-  const id = parseInt($('modal-detalhe').dataset.recId);
+  const id = parseInt($('modal-detalhe').dataset.recId, 10);
   if (id) {
     $('modal-detalhe').classList.remove('aberto');
     excluirRecebimento(id);
