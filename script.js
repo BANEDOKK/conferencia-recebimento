@@ -1,6 +1,7 @@
 // ============================================================
 //  SCRIPT PRINCIPAL – SPA Conferência Eletro (Supabase)
 //  Versão simplificada: LOJA, sem NF/Obs, sem Qtd Esperada e Unidade manual
+//  Listagem de recebimentos sem a coluna ID
 // ============================================================
 
 // --- Estado global ---
@@ -310,7 +311,7 @@ function pararCamera() {
 }
 
 // ============================================================
-//  ADICIONAR ITEM (sem qtd_esperada, unidade automática)
+//  ADICIONAR ITEM
 // ============================================================
 $('btn-add').addEventListener('click', adicionarItem);
 descricao.addEventListener('keydown', (e) => {
@@ -402,7 +403,7 @@ $('btn-limpar').addEventListener('click', () => {
 });
 
 // ============================================================
-//  SALVAR CONFERÊNCIA (sem NF, obs, divergência)
+//  SALVAR CONFERÊNCIA
 // ============================================================
 $('btn-salvar').addEventListener('click', salvarConferencia);
 
@@ -505,7 +506,7 @@ $('btn-ver-lista').addEventListener('click', () => {
 });
 
 // ============================================================
-//  LISTA DE RECEBIMENTOS (sem NF e Observação)
+//  LISTA DE RECEBIMENTOS (SEM A COLUNA ID)
 // ============================================================
 async function carregarRecebimentos() {
   const container = $('lista-recebimentos');
@@ -530,7 +531,9 @@ async function carregarRecebimentos() {
     <div class="card" style="padding:0;overflow-x:auto;">
       <table>
         <thead><tr>
-          <th>ID</th><th>Loja</th><th>Data</th><th style="text-align:center;">Ações</th>
+          <th>Loja</th>
+          <th>Data</th>
+          <th style="text-align:center;">Ações</th>
         </tr></thead>
         <tbody>
   `;
@@ -538,7 +541,6 @@ async function carregarRecebimentos() {
     const dataFormatada = new Date(rec.data_registro).toLocaleString('pt-BR');
     html += `
       <tr>
-        <td>${rec.id}</td>
         <td><strong>${rec.fornecedor}</strong></td>
         <td>${dataFormatada}</td>
         <td style="text-align:center;white-space:nowrap;">
@@ -602,7 +604,7 @@ async function verRecebimento(id) {
 }
 
 // ============================================================
-//  EDITAR RECEBIMENTO (sem NF e Observação)
+//  EDITAR RECEBIMENTO
 // ============================================================
 function editarRecebimento(id) {
   (async () => {
