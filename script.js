@@ -1,5 +1,6 @@
 // ============================================================
 //  SCRIPT PRINCIPAL – SPA Conferência Eletro (Supabase)
+//  VERSÃO COM LOGIN/CADASTRO USANDO TABELA SQL DIRETA
 // ============================================================
 
 // --- Estado global ---
@@ -43,11 +44,11 @@ if (linkLogin) {
 }
 
 // ============================================================
-//  CADASTRO (Auth nativo)
+//  CADASTRO (USANDO TABELA SQL DIRETA)
 // ============================================================
 formCadastroEl.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const email = $('email-cad').value.trim();
+  const usuario = $('email-cad').value.trim();
   const senha = $('senha-cad').value;
   const erroEl = $('cadastro-erro');
   const okEl = $('cadastro-ok');
@@ -61,25 +62,35 @@ formCadastroEl.addEventListener('submit', async (e) => {
   }
 
   try {
-    const { data, error } = await supabase.auth.signUp({
-      email: email,
-      password: senha
-    });
-    if (error) throw error;
+    // Verifica se o usuário já existe
+    const { data: existing, error: errCheck } = await supabase
+      .from('usuarios')
+      .select('usuario')
+      .eq('usuario', usuario)
+      .maybeSingle();
 
-    if (data.user) {
-      okEl.textContent = '✅ Usuário cadastrado com sucesso! Faça login.';
-      okEl.style.display = 'block';
-      formCadastroEl.reset();
-      setTimeout(() => {
-        formLoginEl.style.display = 'block';
-        formCadastroEl.style.display = 'none';
-        okEl.style.display = 'none';
-      }, 3000);
-    } else {
-      erroEl.textContent = '⚠️ Verifique seu e-mail. Pode ser necessário confirmar.';
+    if (errCheck) throw errCheck;
+    if (existing) {
+      erroEl.textContent = '⚠️ Usuário já existe. Escolha outro.';
       erroEl.style.display = 'block';
+      return;
     }
+
+    // Insere novo usuário
+    const { error: errInsert } = await supabase
+      .from('usuarios')
+      .insert({ usuario, senha });
+
+    if (errInsert) throw errInsert;
+
+    okEl.textContent = '✅ Usuário cadastrado com sucesso! Faça login.';
+    okEl.style.display = 'block';
+    formCadastroEl.reset();
+    setTimeout(() => {
+      formLoginEl.style.display = 'block';
+      formCadastroEl.style.display = 'none';
+      okEl.style.display = 'none';
+    }, 3000);
   } catch (err) {
     erroEl.textContent = '❌ ' + err.message;
     erroEl.style.display = 'block';
@@ -87,25 +98,34 @@ formCadastroEl.addEventListener('submit', async (e) => {
 });
 
 // ============================================================
-//  LOGIN (Auth nativo)
+//  LOGIN (USANDO TABELA SQL DIRETA)
 // ============================================================
 const formLogin = $('form-login');
 const loginErro = $('login-erro');
 
 formLogin.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const email = $('email').value.trim();
+  const usuario = $('email').value.trim();
   const senha = $('senha').value;
+
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: senha
-    });
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('usuario', usuario)
+      .eq('senha', senha)
+      .maybeSingle();
+
     if (error) throw error;
 
-    loginErro.style.display = 'none';
-    sessionStorage.setItem('user', JSON.stringify({ usuario: email }));
-    mostrarPainel();
+    if (data) {
+      loginErro.style.display = 'none';
+      sessionStorage.setItem('user', JSON.stringify({ usuario }));
+      mostrarPainel();
+    } else {
+      loginErro.textContent = '❌ Usuário ou senha inválidos.';
+      loginErro.style.display = 'block';
+    }
   } catch (err) {
     loginErro.textContent = '❌ ' + err.message;
     loginErro.style.display = 'block';
@@ -119,8 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-$('btn-sair').addEventListener('click', async () => {
-  await supabase.auth.signOut();
+$('btn-sair').addEventListener('click', () => {
   sessionStorage.removeItem('user');
   document.querySelectorAll('section').forEach(s => s.style.display = 'none');
   $('main-nav').style.display = 'none';
@@ -360,9 +379,6 @@ function renderLista() {
   card.style.display = itens.length ? 'block' : 'none';
   $('badge-total').textContent = `${itens.length} item${itens.length !== 1 ? 's' : ''}`;
 
-  const bd = $('badge-div');
-  if (bd) bd.style.display = 'none';
-
   lista.innerHTML = itens.map((it, i) => {
     return `
       <div class="item-linha" style="border-left-color: #1e4d7b;">
@@ -408,7 +424,6 @@ $('btn-limpar').addEventListener('click', () => {
   itens.length = 0;
   renderLista();
   limparCamposNova();
-  // Reseta também o estado de edição, pois os itens foram limpos
   recebimentoEmEdicao = null;
   $('btn-salvar').textContent = '💾 Finalizar Conferência';
 });
