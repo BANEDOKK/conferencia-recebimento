@@ -1,6 +1,6 @@
 // ============================================================
 //  SCRIPT PRINCIPAL – SPA Conferência Eletro (Supabase)
-//  VERSÃO COM LOGIN/CADASTRO USANDO TABELA SQL DIRETA
+//  USANDO TABELA 'usuarios' DIRETAMENTE (sem RPC, sem Auth nativo)
 // ============================================================
 
 // --- Estado global ---
@@ -44,7 +44,7 @@ if (linkLogin) {
 }
 
 // ============================================================
-//  CADASTRO (USANDO TABELA SQL DIRETA)
+//  CADASTRO (inserção direta na tabela usuarios)
 // ============================================================
 formCadastroEl.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -62,26 +62,26 @@ formCadastroEl.addEventListener('submit', async (e) => {
   }
 
   try {
-    // Verifica se o usuário já existe
-    const { data: existing, error: errCheck } = await supabase
+    // Verificar se o usuário já existe
+    const { data: existing, error: checkError } = await supabase
       .from('usuarios')
       .select('usuario')
       .eq('usuario', usuario)
       .maybeSingle();
 
-    if (errCheck) throw errCheck;
+    if (checkError) throw checkError;
     if (existing) {
-      erroEl.textContent = '⚠️ Usuário já existe. Escolha outro.';
+      erroEl.textContent = '⚠️ Usuário já existe. Escolha outro nome.';
       erroEl.style.display = 'block';
       return;
     }
 
-    // Insere novo usuário
-    const { error: errInsert } = await supabase
+    // Inserir novo usuário
+    const { error: insertError } = await supabase
       .from('usuarios')
       .insert({ usuario, senha });
 
-    if (errInsert) throw errInsert;
+    if (insertError) throw insertError;
 
     okEl.textContent = '✅ Usuário cadastrado com sucesso! Faça login.';
     okEl.style.display = 'block';
@@ -92,13 +92,14 @@ formCadastroEl.addEventListener('submit', async (e) => {
       okEl.style.display = 'none';
     }, 3000);
   } catch (err) {
+    console.error('Erro no cadastro:', err);
     erroEl.textContent = '❌ ' + err.message;
     erroEl.style.display = 'block';
   }
 });
 
 // ============================================================
-//  LOGIN (USANDO TABELA SQL DIRETA)
+//  LOGIN (consulta direta na tabela usuarios)
 // ============================================================
 const formLogin = $('form-login');
 const loginErro = $('login-erro');
@@ -107,11 +108,13 @@ formLogin.addEventListener('submit', async (e) => {
   e.preventDefault();
   const usuario = $('email').value.trim();
   const senha = $('senha').value;
+  loginErro.style.display = 'none';
 
   try {
+    // Buscar usuário com a senha informada
     const { data, error } = await supabase
       .from('usuarios')
-      .select('*')
+      .select('usuario, senha')
       .eq('usuario', usuario)
       .eq('senha', senha)
       .maybeSingle();
@@ -119,19 +122,21 @@ formLogin.addEventListener('submit', async (e) => {
     if (error) throw error;
 
     if (data) {
-      loginErro.style.display = 'none';
-      sessionStorage.setItem('user', JSON.stringify({ usuario }));
+      // Login bem-sucedido
+      sessionStorage.setItem('user', JSON.stringify({ usuario: data.usuario }));
       mostrarPainel();
     } else {
       loginErro.textContent = '❌ Usuário ou senha inválidos.';
       loginErro.style.display = 'block';
     }
   } catch (err) {
+    console.error('Erro no login:', err);
     loginErro.textContent = '❌ ' + err.message;
     loginErro.style.display = 'block';
   }
 });
 
+// --- Verificar sessão ao carregar a página ---
 document.addEventListener('DOMContentLoaded', () => {
   const user = sessionStorage.getItem('user');
   if (user) {
@@ -139,6 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+// --- Logout ---
 $('btn-sair').addEventListener('click', () => {
   sessionStorage.removeItem('user');
   document.querySelectorAll('section').forEach(s => s.style.display = 'none');
@@ -158,6 +164,17 @@ function mostrarPainel() {
   $('main-nav').style.display = 'flex';
   navegarPara('nova');
 }
+
+// ============================================================
+//  O RESTO DO CÓDIGO (BUSCA, CÂMERA, CONFERÊNCIA, LISTAS, ETC)
+//  PERMANECE IGUAL AO ANTERIOR - NENHUMA ALTERAÇÃO
+// ============================================================
+
+// ... (todo o resto do código: navegação, busca produtos, câmera, adicionar item,
+// salvar conferência, listar recebimentos, detalhes, importação CSV etc.)
+
+// ATENÇÃO: COLOQUE AQUI TODO O RESTANTE DO SEU CÓDIGO QUE NÃO FOI MOSTRADO,
+// pois ele não precisa ser alterado. Vou repetir o restante para completar.
 
 // ============================================================
 //  NAVEGAÇÃO
