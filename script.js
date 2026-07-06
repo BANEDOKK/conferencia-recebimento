@@ -122,6 +122,12 @@ $('btn-sair').addEventListener('click', () => {
   $('main-nav').style.display = 'none';
   $('page-login').style.display = 'block';
   formLogin.reset();
+  // Reset global state
+  itens = [];
+  recebimentoEmEdicao = null;
+  renderLista();
+  limparCamposNova();
+  $('fornecedor').value = '';
 });
 
 function mostrarPainel() {
@@ -398,15 +404,23 @@ $('btn-limpar').addEventListener('click', () => {
   itens.length = 0;
   renderLista();
   limparCamposNova();
+  // Reseta também o estado de edição, pois os itens foram limpos
+  recebimentoEmEdicao = null;
+  $('btn-salvar').textContent = '💾 Finalizar Conferência';
 });
 
 // ============================================================
-//  SALVAR CONFERÊNCIA
+//  SALVAR CONFERÊNCIA (CORRIGIDO)
 // ============================================================
 $('btn-salvar').addEventListener('click', salvarConferencia);
 
 async function salvarConferencia() {
   const fornecedor = $('fornecedor').value.trim();
+
+  // Logs para depuração
+  console.log('Fornecedor:', fornecedor);
+  console.log('Itens:', itens);
+  console.log('Modo edição?', recebimentoEmEdicao);
 
   if (!fornecedor) { highlight('fornecedor'); return; }
   if (!itens.length) { alert('Adicione ao menos um item.'); return; }
@@ -445,12 +459,13 @@ async function salvarConferencia() {
       if (errIns) throw errIns;
 
       alert('✅ Recebimento atualizado com sucesso!');
-      recebimentoEmEdicao = null;
-      $('btn-salvar').textContent = '💾 Finalizar Conferência';
+      // Limpeza
       itens.length = 0;
       renderLista();
       limparCamposNova();
       $('fornecedor').value = '';
+      recebimentoEmEdicao = null;
+      btn.innerHTML = '💾 Finalizar Conferência';
       navegarPara('lista');
     } else {
       // ---- NOVO ----
@@ -477,19 +492,30 @@ async function salvarConferencia() {
         .insert(itensParaInserir);
       if (err2) throw err2;
 
+      // Sucesso: exibir modal
       $('modal-resumo').textContent = `${itens.length} item(s) conferido(s) da loja "${fornecedor}".`;
       $('modal-ok').classList.add('aberto');
 
+      // Limpeza completa do estado
       itens.length = 0;
       renderLista();
       limparCamposNova();
       $('fornecedor').value = '';
+      recebimentoEmEdicao = null;  // Garantia
+      btn.innerHTML = '💾 Finalizar Conferência';
     }
   } catch (err) {
+    console.error('Erro ao salvar:', err);
     alert('Erro: ' + err.message);
+    // Não limpa os campos para o usuário poder tentar novamente
   } finally {
     btn.disabled = false;
-    btn.innerHTML = recebimentoEmEdicao ? '💾 Atualizar Conferência' : '💾 Finalizar Conferência';
+    // Se houve erro, o botão mantém o texto adequado
+    if (!recebimentoEmEdicao) {
+      btn.innerHTML = '💾 Finalizar Conferência';
+    } else {
+      btn.innerHTML = '💾 Atualizar Conferência';
+    }
   }
 }
 
