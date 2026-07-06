@@ -43,11 +43,11 @@ if (linkLogin) {
 }
 
 // ============================================================
-//  CADASTRO (RPC)
+//  CADASTRO (Auth nativo)
 // ============================================================
 formCadastroEl.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const usuario = $('email-cad').value.trim();
+  const email = $('email-cad').value.trim();
   const senha = $('senha-cad').value;
   const erroEl = $('cadastro-erro');
   const okEl = $('cadastro-ok');
@@ -61,9 +61,13 @@ formCadastroEl.addEventListener('submit', async (e) => {
   }
 
   try {
-    const { data, error } = await supabase.rpc('cadastrar_usuario', { usuario, senha });
+    const { data, error } = await supabase.auth.signUp({
+      email: email,
+      password: senha
+    });
     if (error) throw error;
-    if (data === true) {
+
+    if (data.user) {
       okEl.textContent = '✅ Usuário cadastrado com sucesso! Faça login.';
       okEl.style.display = 'block';
       formCadastroEl.reset();
@@ -73,7 +77,7 @@ formCadastroEl.addEventListener('submit', async (e) => {
         okEl.style.display = 'none';
       }, 3000);
     } else {
-      erroEl.textContent = '⚠️ Nome de usuário já existe. Escolha outro.';
+      erroEl.textContent = '⚠️ Verifique seu e-mail. Pode ser necessário confirmar.';
       erroEl.style.display = 'block';
     }
   } catch (err) {
@@ -83,26 +87,25 @@ formCadastroEl.addEventListener('submit', async (e) => {
 });
 
 // ============================================================
-//  LOGIN (via RPC verificar_login)
+//  LOGIN (Auth nativo)
 // ============================================================
 const formLogin = $('form-login');
 const loginErro = $('login-erro');
 
 formLogin.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const usuario = $('email').value.trim();
+  const email = $('email').value.trim();
   const senha = $('senha').value;
   try {
-    const { data, error } = await supabase.rpc('verificar_login', { usuario, senha });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: senha
+    });
     if (error) throw error;
-    if (data === true) {
-      loginErro.style.display = 'none';
-      sessionStorage.setItem('user', JSON.stringify({ usuario }));
-      mostrarPainel();
-    } else {
-      loginErro.textContent = '❌ Usuário ou senha inválidos.';
-      loginErro.style.display = 'block';
-    }
+
+    loginErro.style.display = 'none';
+    sessionStorage.setItem('user', JSON.stringify({ usuario: email }));
+    mostrarPainel();
   } catch (err) {
     loginErro.textContent = '❌ ' + err.message;
     loginErro.style.display = 'block';
@@ -116,7 +119,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-$('btn-sair').addEventListener('click', () => {
+$('btn-sair').addEventListener('click', async () => {
+  await supabase.auth.signOut();
   sessionStorage.removeItem('user');
   document.querySelectorAll('section').forEach(s => s.style.display = 'none');
   $('main-nav').style.display = 'none';
@@ -410,14 +414,13 @@ $('btn-limpar').addEventListener('click', () => {
 });
 
 // ============================================================
-//  SALVAR CONFERÊNCIA (CORRIGIDO)
+//  SALVAR CONFERÊNCIA
 // ============================================================
 $('btn-salvar').addEventListener('click', salvarConferencia);
 
 async function salvarConferencia() {
   const fornecedor = $('fornecedor').value.trim();
 
-  // Logs para depuração
   console.log('Fornecedor:', fornecedor);
   console.log('Itens:', itens);
   console.log('Modo edição?', recebimentoEmEdicao);
@@ -459,7 +462,6 @@ async function salvarConferencia() {
       if (errIns) throw errIns;
 
       alert('✅ Recebimento atualizado com sucesso!');
-      // Limpeza
       itens.length = 0;
       renderLista();
       limparCamposNova();
@@ -492,25 +494,21 @@ async function salvarConferencia() {
         .insert(itensParaInserir);
       if (err2) throw err2;
 
-      // Sucesso: exibir modal
       $('modal-resumo').textContent = `${itens.length} item(s) conferido(s) da loja "${fornecedor}".`;
       $('modal-ok').classList.add('aberto');
 
-      // Limpeza completa do estado
       itens.length = 0;
       renderLista();
       limparCamposNova();
       $('fornecedor').value = '';
-      recebimentoEmEdicao = null;  // Garantia
+      recebimentoEmEdicao = null;
       btn.innerHTML = '💾 Finalizar Conferência';
     }
   } catch (err) {
     console.error('Erro ao salvar:', err);
     alert('Erro: ' + err.message);
-    // Não limpa os campos para o usuário poder tentar novamente
   } finally {
     btn.disabled = false;
-    // Se houve erro, o botão mantém o texto adequado
     if (!recebimentoEmEdicao) {
       btn.innerHTML = '💾 Finalizar Conferência';
     } else {
@@ -530,7 +528,7 @@ $('btn-ver-lista').addEventListener('click', () => {
 });
 
 // ============================================================
-//  LISTA DE RECEBIMENTOS (APENAS RENDERIZAÇÃO)
+//  LISTA DE RECEBIMENTOS
 // ============================================================
 async function carregarRecebimentos() {
   const container = $('lista-recebimentos');
@@ -580,7 +578,7 @@ async function carregarRecebimentos() {
 }
 
 // ============================================================
-//  DELEGAÇÃO DE EVENTOS PARA A LISTA (executado uma única vez)
+//  DELEGAÇÃO DE EVENTOS PARA A LISTA
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
   const container = $('lista-recebimentos');
