@@ -1,8 +1,5 @@
 // ============================================================
 //  SCRIPT PRINCIPAL – Conferência Eletro (Supabase)
-//  COM DETECÇÃO AUTOMÁTICA DE ESTRUTURA DA TABELA
-//  EDIÇÃO DE QUANTIDADE NA LISTA
-//  CONTROLE DE USUÁRIO - APENAS O CRIADOR PODE EDITAR
 // ============================================================
 
 // --- Estado global ---
@@ -16,66 +13,6 @@ let usuarioLogado = null;
 // --- Elementos DOM ---
 const $ = (id) => document.getElementById(id);
 const $$ = (sel) => document.querySelectorAll(sel);
-
-// --- Configuração da tabela (detectada automaticamente) ---
-let TABELA_CONFIG = {
-    usuarioField: 'usuario',
-    senhaField: 'senha'
-};
-
-// ============================================================
-//  DIAGNÓSTICO - DETECTAR ESTRUTURA DA TABELA
-// ============================================================
-async function detectarEstruturaTabela() {
-    try {
-        console.log('🔍 Detectando estrutura da tabela usuarios...');
-        
-        const { data, error } = await supabase
-            .from('usuarios')
-            .select('*')
-            .limit(1);
-        
-        if (error) {
-            console.error('❌ Erro ao acessar tabela usuarios:', error);
-            return false;
-        }
-        
-        if (data && data.length > 0) {
-            const campos = Object.keys(data[0]);
-            console.log('✅ Campos encontrados:', campos);
-            
-            if (campos.includes('usuario')) {
-                TABELA_CONFIG.usuarioField = 'usuario';
-            } else if (campos.includes('username')) {
-                TABELA_CONFIG.usuarioField = 'username';
-            } else if (campos.includes('email')) {
-                TABELA_CONFIG.usuarioField = 'email';
-            }
-            
-            if (campos.includes('senha')) {
-                TABELA_CONFIG.senhaField = 'senha';
-            } else if (campos.includes('password')) {
-                TABELA_CONFIG.senhaField = 'password';
-            } else if (campos.includes('senha_hash')) {
-                TABELA_CONFIG.senhaField = 'senha_hash';
-            } else if (campos.includes('hash')) {
-                TABELA_CONFIG.senhaField = 'hash';
-            } else {
-                console.warn('⚠️ Nenhum campo de senha encontrado!');
-                return false;
-            }
-            
-            console.log(`📋 Configuração detectada: usuário='${TABELA_CONFIG.usuarioField}', senha='${TABELA_CONFIG.senhaField}'`);
-            return true;
-        } else {
-            console.log('ℹ️ Tabela usuarios está vazia. Usando configuração padrão.');
-            return true;
-        }
-    } catch (err) {
-        console.error('Erro no diagnóstico:', err);
-        return false;
-    }
-}
 
 // ============================================================
 //  ALTERNÂNCIA LOGIN / CADASTRO
@@ -127,8 +64,8 @@ formCadastroEl.addEventListener('submit', async (e) => {
     try {
         const { data: existing, error: checkError } = await supabase
             .from('usuarios')
-            .select(TABELA_CONFIG.usuarioField)
-            .eq(TABELA_CONFIG.usuarioField, usuario)
+            .select('usuario')
+            .eq('usuario', usuario)
             .maybeSingle();
 
         if (checkError) throw checkError;
@@ -138,13 +75,9 @@ formCadastroEl.addEventListener('submit', async (e) => {
             return;
         }
 
-        const insertData = {};
-        insertData[TABELA_CONFIG.usuarioField] = usuario;
-        insertData[TABELA_CONFIG.senhaField] = senha;
-
         const { error: insertError } = await supabase
             .from('usuarios')
-            .insert(insertData);
+            .insert({ usuario, senha });
 
         if (insertError) throw insertError;
 
@@ -157,14 +90,13 @@ formCadastroEl.addEventListener('submit', async (e) => {
             okEl.style.display = 'none';
         }, 3000);
     } catch (err) {
-        console.error('Erro no cadastro:', err);
         erroEl.textContent = '❌ ' + err.message;
         erroEl.style.display = 'block';
     }
 });
 
 // ============================================================
-//  LOGIN
+//  LOGIN - CORRIGIDO
 // ============================================================
 const formLogin = $('form-login');
 const loginErro = $('login-erro');
@@ -175,43 +107,50 @@ formLogin.addEventListener('submit', async (e) => {
     const senha = $('senha').value;
     loginErro.style.display = 'none';
 
+    if (!usuario || !senha) {
+        loginErro.textContent = '❌ Preencha usuário e senha.';
+        loginErro.style.display = 'block';
+        return;
+    }
+
     try {
+        // Buscar usuário
         const { data, error } = await supabase
             .from('usuarios')
-            .select(`${TABELA_CONFIG.usuarioField}, ${TABELA_CONFIG.senhaField}`)
-            .eq(TABELA_CONFIG.usuarioField, usuario)
-            .maybeSingle();
+            .select('*')
+            .eq('usuario', usuario);
 
-        if (error) throw error;
+        if (error) {
+            loginErro.textContent = '❌ Erro ao conectar ao banco.';
+            loginErro.style.display = 'block';
+            return;
+        }
 
-        if (data) {
-            const senhaCorreta = data[TABELA_CONFIG.senhaField] === senha;
-            
-            if (senhaCorreta) {
-                usuarioLogado = data[TABELA_CONFIG.usuarioField];
-                sessionStorage.setItem('user', JSON.stringify({ 
-                    usuario: usuarioLogado 
-                }));
-                mostrarPainel();
-            } else {
-                loginErro.textContent = '❌ Senha incorreta.';
-                loginErro.style.display = 'block';
-            }
-        } else {
+        if (!data || data.length === 0) {
             loginErro.textContent = '❌ Usuário não encontrado.';
+            loginErro.style.display = 'block';
+            return;
+        }
+
+        const user = data[0];
+
+        // Verificar senha
+        if (user.senha === senha) {
+            usuarioLogado = user.usuario;
+            sessionStorage.setItem('user', JSON.stringify({ usuario: usuarioLogado }));
+            mostrarPainel();
+        } else {
+            loginErro.textContent = '❌ Senha incorreta.';
             loginErro.style.display = 'block';
         }
     } catch (err) {
-        console.error('Erro no login:', err);
-        loginErro.textContent = '❌ ' + err.message;
+        loginErro.textContent = '❌ Erro: ' + err.message;
         loginErro.style.display = 'block';
     }
 });
 
 // --- Verificar sessão ao carregar a página ---
-document.addEventListener('DOMContentLoaded', async () => {
-    await detectarEstruturaTabela();
-    
+document.addEventListener('DOMContentLoaded', () => {
     const user = sessionStorage.getItem('user');
     if (user) {
         const parsed = JSON.parse(user);
@@ -348,7 +287,7 @@ async function buscarProduto(cod) {
             }
         }
     } catch (err) {
-        console.error(err);
+        // erro silencioso
     }
 }
 
@@ -402,8 +341,8 @@ function abrirCamera() {
             buscarProduto(decoded);
         },
         () => {}
-    ).catch(err => {
-        alert('Câmera indisponível: ' + err);
+    ).catch(() => {
+        alert('Câmera indisponível');
         pararCamera();
     });
     cameraAberta = true;
@@ -456,7 +395,7 @@ function adicionarItem() {
 }
 
 // ============================================================
-//  RENDER LISTA COM EDIÇÃO DE QUANTIDADE
+//  RENDER LISTA
 // ============================================================
 function renderLista() {
     const card = $('card-itens');
@@ -566,7 +505,6 @@ async function salvarConferencia() {
 
     try {
         if (recebimentoEmEdicao) {
-            // --- EDIÇÃO - Verifica se o usuário é o criador ---
             const { data: recExistente, error: checkError } = await supabase
                 .from('recebimentos')
                 .select('criado_por')
@@ -617,7 +555,6 @@ async function salvarConferencia() {
             btn.innerHTML = '💾 Finalizar Conferência';
             navegarPara('lista');
         } else {
-            // --- NOVO - Salva com o nome do usuário ---
             const { data: rec, error: err1 } = await supabase
                 .from('recebimentos')
                 .insert({ 
@@ -657,7 +594,6 @@ async function salvarConferencia() {
             btn.innerHTML = '💾 Finalizar Conferência';
         }
     } catch (err) {
-        console.error('Erro ao salvar:', err);
         alert('Erro: ' + err.message);
     } finally {
         btn.disabled = false;
@@ -669,7 +605,7 @@ async function salvarConferencia() {
     }
 }
 
-// Fechar modal de sucesso
+// Fechar modal
 $('btn-nova-conf').addEventListener('click', () => {
     $('modal-ok').classList.remove('aberto');
     navegarPara('nova');
@@ -720,22 +656,15 @@ async function carregarRecebimentos() {
         html += `
             <tr>
                 <td><strong>${rec.fornecedor}</strong></td>
-                <td>
-                    <span class="conferente ${isCriador ? 'conferente-meu' : 'conferente-outro'}">
-                        👤 ${criador}
-                        ${isCriador ? ' <span style="font-size:0.7rem;color:var(--verde);">(você)</span>' : ''}
-                    </span>
-                </td>
+                <td>👤 ${criador} ${isCriador ? '<span style="color:var(--verde);font-size:0.7rem;">(você)</span>' : ''}</td>
                 <td>${dataFormatada}</td>
                 <td style="text-align:center;white-space:nowrap;">
                     <button class="btn btn-sm btn-azul" data-acao="ver" data-id="${rec.id}">👁️ Ver</button>
                     ${isCriador ? 
-                        `<button class="btn btn-sm btn-laranja" data-acao="editar" data-id="${rec.id}">✏️ Editar</button>` :
-                        `<button class="btn btn-sm btn-cinza" disabled style="opacity:0.5;cursor:not-allowed;" title="Apenas o criador pode editar">🔒 Editar</button>`
-                    }
-                    ${isCriador ? 
-                        `<button class="btn btn-sm btn-danger" data-acao="excluir" data-id="${rec.id}">🗑️</button>` :
-                        `<button class="btn btn-sm btn-cinza" disabled style="opacity:0.5;cursor:not-allowed;" title="Apenas o criador pode excluir">🔒</button>`
+                        `<button class="btn btn-sm btn-laranja" data-acao="editar" data-id="${rec.id}">✏️ Editar</button>
+                         <button class="btn btn-sm btn-danger" data-acao="excluir" data-id="${rec.id}">🗑️</button>` :
+                        `<button class="btn btn-sm btn-cinza" disabled style="opacity:0.5;cursor:not-allowed;" title="Apenas o criador pode editar">🔒 Editar</button>
+                         <button class="btn btn-sm btn-cinza" disabled style="opacity:0.5;cursor:not-allowed;" title="Apenas o criador pode excluir">🔒</button>`
                     }
                 </td>
             </tr>
@@ -746,7 +675,7 @@ async function carregarRecebimentos() {
 }
 
 // ============================================================
-//  DELEGAÇÃO DE EVENTOS PARA A LISTA
+//  EVENTOS DA LISTA
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
     const container = $('lista-recebimentos');
@@ -819,11 +748,10 @@ async function verRecebimento(id) {
 }
 
 // ============================================================
-//  EDITAR RECEBIMENTO - COM VALIDAÇÃO
+//  EDITAR RECEBIMENTO
 // ============================================================
 function editarRecebimento(id) {
     (async () => {
-        // Verifica se o usuário é o criador
         const { data: rec, error: checkError } = await supabase
             .from('recebimentos')
             .select('*')
@@ -833,7 +761,7 @@ function editarRecebimento(id) {
         if (checkError) { alert('Erro ao buscar recebimento: ' + checkError.message); return; }
         
         if (rec.criado_por !== usuarioLogado) {
-            alert('❌ Você não pode editar esta conferência. Apenas o criador (${rec.criado_por}) pode editá-la.');
+            alert('❌ Você não pode editar esta conferência. Apenas o criador pode editá-la.');
             return;
         }
 
@@ -864,10 +792,9 @@ function editarRecebimento(id) {
 }
 
 // ============================================================
-//  EXCLUIR RECEBIMENTO - COM VALIDAÇÃO
+//  EXCLUIR RECEBIMENTO
 // ============================================================
 async function excluirRecebimento(id) {
-    // Verifica se o usuário é o criador
     const { data: rec, error: checkError } = await supabase
         .from('recebimentos')
         .select('criado_por')
@@ -918,4 +845,46 @@ formImportar.addEventListener('submit', async (e) => {
     const file = fileInput.files[0];
     if (!file) return;
 
-    importStatus.innerHTML = '<p
+    importStatus.innerHTML = '<p>⏳ Processando...</p>';
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+        const text = ev.target.result;
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        const dataLines = lines.slice(1);
+        let count = 0;
+        for (const line of dataLines) {
+            const cols = line.split(';');
+            if (cols.length < 9) continue;
+            const [nomerazao, seqproduto, desccompleta, codacesso, tipcodigo, _, __, embalagem, qtdembalagem] = cols;
+            const cod = codacesso.trim();
+            if (!cod) continue;
+            try {
+                const { error } = await supabase
+                    .from('produtos')
+                    .upsert({
+                        codacesso: cod,
+                        seqproduto: seqproduto.trim(),
+                        desccompleta: desccompleta.trim(),
+                        tipcodigo: tipcodigo.trim(),
+                        embalagem: embalagem.trim(),
+                        qtdembalagem: qtdembalagem.trim(),
+                        nomerazao: ''
+                    }, { onConflict: 'codacesso' });
+                if (!error) count++;
+            } catch (err) {}
+        }
+        importStatus.innerHTML = `<div class="flash ok">✅ ${count} produtos importados/atualizados com sucesso!</div>`;
+        carregarTotalProdutos();
+        fileInput.value = '';
+    };
+    reader.readAsText(file, 'latin-1');
+});
+
+async function carregarTotalProdutos() {
+    const { count, error } = await supabase
+        .from('produtos')
+        .select('*', { count: 'exact', head: true });
+    if (!error) {
+        $('total-produtos').textContent = count;
+    }
+}
