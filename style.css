@@ -288,6 +288,7 @@ textarea:focus {
   gap: 10px;
   align-items: center;
   font-size: .9rem;
+  flex-wrap: wrap;
 }
 .qtd-esp {
   color: var(--texto-md);
@@ -310,6 +311,45 @@ textarea:focus {
   color: var(--laranja);
   font-weight: 700;
   font-size: .8rem;
+}
+
+/* ============================================================
+   EDIÇÃO DE QUANTIDADE NA LISTA
+   ============================================================ */
+.qtd-edit {
+  width: 80px;
+  padding: 4px 8px;
+  border: 2px solid var(--cinza-md);
+  border-radius: 5px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--azul);
+  background: white;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.qtd-edit:hover {
+  border-color: var(--azul-md);
+  background: var(--azul-claro);
+}
+
+.qtd-edit:focus {
+  outline: none;
+  border-color: var(--azul-md);
+  box-shadow: 0 0 0 3px rgba(30, 77, 123, 0.15);
+  background: white;
+}
+
+/* Remover setas de incremento/decremento */
+.qtd-edit::-webkit-inner-spin-button,
+.qtd-edit::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.qtd-edit {
+  -moz-appearance: textfield;
 }
 
 /* BADGES */
@@ -583,5 +623,26 @@ tr:hover td {
   }
   .login-box {
     padding: 30px 20px;
+  }
+  
+  /* Ajustes para edição de quantidade em mobile */
+  .qtd-edit {
+    width: 65px;
+    font-size: 0.8rem;
+    padding: 3px 5px;
+  }
+  
+  .item-linha {
+    flex-wrap: wrap;
+    padding: 8px 10px;
+  }
+  
+  .item-info {
+    flex: 1 1 100%;
+    margin-bottom: 4px;
+  }
+  
+  .item-qtds {
+    flex: 1;
   }
 }

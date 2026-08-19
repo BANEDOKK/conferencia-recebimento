@@ -1,6 +1,7 @@
 // ============================================================
 //  SCRIPT PRINCIPAL – Conferência Eletro (Supabase)
 //  COM DETECÇÃO AUTOMÁTICA DE ESTRUTURA DA TABELA
+//  E EDIÇÃO DE QUANTIDADE NA LISTA
 // ============================================================
 
 // --- Estado global ---
@@ -27,7 +28,6 @@ async function detectarEstruturaTabela() {
     try {
         console.log('🔍 Detectando estrutura da tabela usuarios...');
         
-        // Tenta buscar um registro existente
         const { data, error } = await supabase
             .from('usuarios')
             .select('*')
@@ -42,7 +42,6 @@ async function detectarEstruturaTabela() {
             const campos = Object.keys(data[0]);
             console.log('✅ Campos encontrados:', campos);
             
-            // Detectar campo de usuário
             if (campos.includes('usuario')) {
                 TABELA_CONFIG.usuarioField = 'usuario';
             } else if (campos.includes('username')) {
@@ -51,7 +50,6 @@ async function detectarEstruturaTabela() {
                 TABELA_CONFIG.usuarioField = 'email';
             }
             
-            // Detectar campo de senha
             if (campos.includes('senha')) {
                 TABELA_CONFIG.senhaField = 'senha';
             } else if (campos.includes('password')) {
@@ -125,7 +123,6 @@ formCadastroEl.addEventListener('submit', async (e) => {
     }
 
     try {
-        // Verificar se o usuário já existe
         const { data: existing, error: checkError } = await supabase
             .from('usuarios')
             .select(TABELA_CONFIG.usuarioField)
@@ -139,7 +136,6 @@ formCadastroEl.addEventListener('submit', async (e) => {
             return;
         }
 
-        // Inserir novo usuário com o campo correto
         const insertData = {};
         insertData[TABELA_CONFIG.usuarioField] = usuario;
         insertData[TABELA_CONFIG.senhaField] = senha;
@@ -178,7 +174,6 @@ formLogin.addEventListener('submit', async (e) => {
     loginErro.style.display = 'none';
 
     try {
-        // Buscar usuário
         const { data, error } = await supabase
             .from('usuarios')
             .select(`${TABELA_CONFIG.usuarioField}, ${TABELA_CONFIG.senhaField}`)
@@ -188,11 +183,9 @@ formLogin.addEventListener('submit', async (e) => {
         if (error) throw error;
 
         if (data) {
-            // Verificar senha
             const senhaCorreta = data[TABELA_CONFIG.senhaField] === senha;
             
             if (senhaCorreta) {
-                // Login bem-sucedido
                 sessionStorage.setItem('user', JSON.stringify({ 
                     usuario: data[TABELA_CONFIG.usuarioField] 
                 }));
@@ -214,7 +207,6 @@ formLogin.addEventListener('submit', async (e) => {
 
 // --- Verificar sessão ao carregar a página ---
 document.addEventListener('DOMContentLoaded', async () => {
-    // Detectar estrutura da tabela primeiro
     await detectarEstruturaTabela();
     
     const user = sessionStorage.getItem('user');
@@ -457,11 +449,17 @@ function adicionarItem() {
     limparCamposNova();
 }
 
+// ============================================================
+//  RENDER LISTA COM EDIÇÃO DE QUANTIDADE
+// ============================================================
 function renderLista() {
     const card = $('card-itens');
     const lista = $('lista-itens');
     card.style.display = itens.length ? 'block' : 'none';
-    $('badge-total').textContent = `${itens.length} item${itens.length !== 1 ? 's' : ''}`;
+    
+    // Calcular total de itens e quantidade
+    const totalQuantidade = itens.reduce((sum, item) => sum + item.qtd_recebida, 0);
+    $('badge-total').textContent = `${itens.length} item${itens.length !== 1 ? 's' : ''} (${totalQuantidade.toFixed(3)} un)`;
 
     lista.innerHTML = itens.map((it, i) => {
         return `
@@ -473,13 +471,50 @@ function renderLista() {
                     <div class="item-meta">${it.codacesso || 'Código manual'} · ${it.unidade}</div>
                 </div>
                 <div class="item-qtds">
-                    <span class="qtd-rec">${fmt(it.qtd_recebida)} ${it.unidade}</span>
+                    <span class="qtd-rec">
+                        <input type="number" 
+                               class="qtd-edit" 
+                               data-index="${i}" 
+                               value="${it.qtd_recebida}" 
+                               min="0.001" 
+                               step="0.001"
+                               title="Clique para editar a quantidade">
+                        <span style="font-size:0.7rem;color:var(--cinza-esc);">${it.unidade}</span>
+                    </span>
                 </div>
                 <button class="btn btn-danger btn-icon btn-sm" data-remover="${i}" title="Remover">✕</button>
             </div>
         `;
     }).join('');
 
+    // Event listener para edição de quantidade
+    lista.querySelectorAll('.qtd-edit').forEach(input => {
+        input.addEventListener('change', function() {
+            const idx = parseInt(this.dataset.index);
+            const novoValor = parseFloat(this.value);
+            if (!isNaN(novoValor) && novoValor > 0) {
+                itens[idx].qtd_recebida = novoValor;
+                // Atualizar o badge de total
+                const totalQuantidade = itens.reduce((sum, item) => sum + item.qtd_recebida, 0);
+                $('badge-total').textContent = `${itens.length} item${itens.length !== 1 ? 's' : ''} (${totalQuantidade.toFixed(3)} un)`;
+            } else {
+                alert('Digite um valor válido maior que zero.');
+                this.value = itens[idx].qtd_recebida;
+            }
+        });
+
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                this.blur();
+            }
+        });
+
+        input.addEventListener('focus', function() {
+            this.select();
+        });
+    });
+
+    // Event listener para remover item
     lista.querySelectorAll('[data-remover]').forEach(btn => {
         btn.addEventListener('click', () => {
             const idx = parseInt(btn.dataset.remover);
@@ -529,7 +564,6 @@ async function salvarConferencia() {
 
     try {
         if (recebimentoEmEdicao) {
-            // ---- EDIÇÃO ----
             const { error: err1 } = await supabase
                 .from('recebimentos')
                 .update({ fornecedor, nota_fiscal: '', observacao: '' })
@@ -565,7 +599,6 @@ async function salvarConferencia() {
             btn.innerHTML = '💾 Finalizar Conferência';
             navegarPara('lista');
         } else {
-            // ---- NOVO ----
             const { data: rec, error: err1 } = await supabase
                 .from('recebimentos')
                 .insert({ fornecedor, nota_fiscal: '', observacao: '' })
