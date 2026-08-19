@@ -1,648 +1,895 @@
-:root {
-  --azul: #1a3a5c;
-  --azul-md: #1e4d7b;
-  --azul-claro: #e8f0fa;
-  --laranja: #e07b2a;
-  --laranja-claro: #fff3e6;
-  --verde: #1a7a45;
-  --verde-claro: #e6f7ee;
-  --vermelho: #c0392b;
-  --vermelho-claro: #fdecea;
-  --amarelo: #f0ad00;
-  --amarelo-claro: #fff8e1;
-  --cinza: #f2f4f7;
-  --cinza-md: #d0d7e2;
-  --cinza-esc: #8492a6;
-  --texto: #1a2535;
-  --texto-md: #4a5568;
-  --branco: #fff;
-  --sombra: 0 2px 14px rgba(0, 0, 0, 0.09);
-  --radius: 10px;
+// ============================================================
+//  SCRIPT PRINCIPAL – Conferência Eletro (Supabase)
+//  CAMPO DE SENHA: senha_hash
+// ============================================================
+
+// --- Estado global ---
+let itens = [];
+let html5QrCode = null;
+let cameraAberta = false;
+let buscaTimeout = null;
+let recebimentoEmEdicao = null;
+let usuarioLogado = null;
+
+// --- Elementos DOM ---
+const $ = (id) => document.getElementById(id);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+// ============================================================
+//  ALTERNÂNCIA LOGIN / CADASTRO
+// ============================================================
+const linkCadastro = $('link-cadastro');
+const linkLogin = $('link-login');
+const formLoginEl = $('form-login');
+const formCadastroEl = $('form-cadastro');
+
+if (linkCadastro) {
+    linkCadastro.addEventListener('click', (e) => {
+        e.preventDefault();
+        formLoginEl.style.display = 'none';
+        formCadastroEl.style.display = 'block';
+        $('login-erro').style.display = 'none';
+        $('cadastro-erro').style.display = 'none';
+        $('cadastro-ok').style.display = 'none';
+    });
+}
+if (linkLogin) {
+    linkLogin.addEventListener('click', (e) => {
+        e.preventDefault();
+        formLoginEl.style.display = 'block';
+        formCadastroEl.style.display = 'none';
+        $('login-erro').style.display = 'none';
+        $('cadastro-erro').style.display = 'none';
+        $('cadastro-ok').style.display = 'none';
+    });
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+// ============================================================
+//  CADASTRO
+// ============================================================
+formCadastroEl.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const usuario = $('email-cad').value.trim();
+    const senha = $('senha-cad').value;
+    const erroEl = $('cadastro-erro');
+    const okEl = $('cadastro-ok');
+    erroEl.style.display = 'none';
+    okEl.style.display = 'none';
+
+    if (senha.length < 6) {
+        erroEl.textContent = '❌ A senha deve ter no mínimo 6 caracteres.';
+        erroEl.style.display = 'block';
+        return;
+    }
+
+    try {
+        const { data: existing, error: checkError } = await supabase
+            .from('usuarios')
+            .select('usuario')
+            .eq('usuario', usuario)
+            .maybeSingle();
+
+        if (checkError) throw checkError;
+        if (existing) {
+            erroEl.textContent = '⚠️ Usuário já existe. Escolha outro nome.';
+            erroEl.style.display = 'block';
+            return;
+        }
+
+        // Inserir com o campo correto: senha_hash
+        const { error: insertError } = await supabase
+            .from('usuarios')
+            .insert({ 
+                usuario: usuario, 
+                senha_hash: senha 
+            });
+
+        if (insertError) throw insertError;
+
+        okEl.textContent = '✅ Usuário cadastrado com sucesso! Faça login.';
+        okEl.style.display = 'block';
+        formCadastroEl.reset();
+        setTimeout(() => {
+            formLoginEl.style.display = 'block';
+            formCadastroEl.style.display = 'none';
+            okEl.style.display = 'none';
+        }, 3000);
+    } catch (err) {
+        erroEl.textContent = '❌ ' + err.message;
+        erroEl.style.display = 'block';
+    }
+});
+
+// ============================================================
+//  LOGIN - CAMPO CORRETO: senha_hash
+// ============================================================
+const formLogin = $('form-login');
+const loginErro = $('login-erro');
+
+formLogin.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const usuario = $('email').value.trim();
+    const senha = $('senha').value;
+    loginErro.style.display = 'none';
+
+    if (!usuario || !senha) {
+        loginErro.textContent = '❌ Preencha usuário e senha.';
+        loginErro.style.display = 'block';
+        return;
+    }
+
+    try {
+        // Buscar usuário com o campo correto: senha_hash
+        const { data, error } = await supabase
+            .from('usuarios')
+            .select('usuario, senha_hash')
+            .eq('usuario', usuario);
+
+        if (error) {
+            loginErro.textContent = '❌ Erro ao conectar ao banco: ' + error.message;
+            loginErro.style.display = 'block';
+            return;
+        }
+
+        if (!data || data.length === 0) {
+            loginErro.textContent = '❌ Usuário não encontrado.';
+            loginErro.style.display = 'block';
+            return;
+        }
+
+        const user = data[0];
+
+        // Verificar senha usando o campo correto
+        if (user.senha_hash === senha) {
+            usuarioLogado = user.usuario;
+            sessionStorage.setItem('user', JSON.stringify({ usuario: usuarioLogado }));
+            mostrarPainel();
+        } else {
+            loginErro.textContent = '❌ Senha incorreta.';
+            loginErro.style.display = 'block';
+        }
+    } catch (err) {
+        loginErro.textContent = '❌ Erro: ' + err.message;
+        loginErro.style.display = 'block';
+    }
+});
+
+// --- Verificar sessão ao carregar a página ---
+document.addEventListener('DOMContentLoaded', () => {
+    const user = sessionStorage.getItem('user');
+    if (user) {
+        const parsed = JSON.parse(user);
+        usuarioLogado = parsed.usuario;
+        mostrarPainel();
+    }
+});
+
+// --- Logout ---
+$('btn-sair').addEventListener('click', () => {
+    sessionStorage.removeItem('user');
+    usuarioLogado = null;
+    document.querySelectorAll('section').forEach(s => s.style.display = 'none');
+    $('main-nav').style.display = 'none';
+    $('page-login').style.display = 'block';
+    formLogin.reset();
+    itens = [];
+    recebimentoEmEdicao = null;
+    renderLista();
+    limparCamposNova();
+    $('fornecedor').value = '';
+});
+
+function mostrarPainel() {
+    $('page-login').style.display = 'none';
+    $('main-nav').style.display = 'flex';
+    navegarPara('nova');
 }
 
-body {
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  background: var(--cinza);
-  color: var(--texto);
-  min-height: 100vh;
+// ============================================================
+//  NAVEGAÇÃO
+// ============================================================
+const navLinks = document.querySelectorAll('[data-page]');
+navLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const page = link.dataset.page;
+        navegarPara(page);
+    });
+});
+
+function navegarPara(page) {
+    navLinks.forEach(l => l.classList.remove('ativo'));
+    document.querySelector(`[data-page="${page}"]`)?.classList.add('ativo');
+
+    const sections = {
+        nova: $('page-nova'),
+        lista: $('page-lista'),
+        produtos: $('page-produtos'),
+    };
+    Object.keys(sections).forEach(key => {
+        sections[key].style.display = key === page ? 'block' : 'none';
+    });
+
+    if (page === 'lista') carregarRecebimentos();
+    if (page === 'produtos') carregarTotalProdutos();
 }
 
-/* NAV */
-nav {
-  background: var(--azul);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 28px;
-  height: 56px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
-  position: sticky;
-  top: 0;
-  z-index: 100;
+// ============================================================
+//  FUNÇÕES AUXILIARES
+// ============================================================
+function fmt(n) {
+    return n % 1 === 0 ? n.toString() : n.toFixed(3).replace(/0+$/, '');
 }
 
-.brand {
-  font-size: 1.1rem;
-  font-weight: 800;
-  letter-spacing: .3px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.brand .ico {
-  font-size: 1.5rem;
-}
-.brand small {
-  font-size: .72rem;
-  font-weight: 400;
-  opacity: .7;
-  display: block;
-  line-height: 1.1;
+function highlight(id) {
+    const el = $(id);
+    if (!el) return;
+    el.focus();
+    el.style.borderColor = '#c0392b';
+    setTimeout(() => el.style.borderColor = '', 1500);
 }
 
-.nav-links {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-nav a {
-  color: rgba(255, 255, 255, .82);
-  text-decoration: none;
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-size: .88rem;
-  font-weight: 500;
-  transition: background .18s;
-  cursor: pointer;
-}
-nav a:hover,
-nav a.ativo {
-  background: rgba(255, 255, 255, .15);
-  color: #fff;
-}
-#btn-sair {
-  border: 1px solid rgba(255, 255, 255, .25) !important;
-  background: rgba(255, 255, 255, .08);
+// ============================================================
+//  BUSCA DE PRODUTOS
+// ============================================================
+const inputCodBarras = $('cod-barras');
+const resOk = $('res-ok');
+const resNot = $('res-not');
+const resDesc = $('res-desc');
+const resMeta = $('res-meta');
+const hSeq = $('h-seqproduto');
+const hCodAcesso = $('h-codacesso');
+const hUnidade = $('h-unidade');
+const descricao = $('descricao');
+
+inputCodBarras.addEventListener('input', function () {
+    clearTimeout(buscaTimeout);
+    const cod = this.value.trim();
+    if (cod.length >= 8) {
+        buscaTimeout = setTimeout(() => buscarProduto(cod), 380);
+    } else {
+        limparRes();
+    }
+});
+inputCodBarras.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        buscarProduto(inputCodBarras.value.trim());
+    }
+});
+
+async function buscarProduto(cod) {
+    if (!cod) return;
+    try {
+        const { data, error } = await supabase
+            .from('produtos')
+            .select('*')
+            .eq('codacesso', cod)
+            .limit(1)
+            .maybeSingle();
+        if (error) throw error;
+        if (data) {
+            aplicarResultado(data);
+        } else {
+            const { data: data2 } = await supabase
+                .from('produtos')
+                .select('*')
+                .eq('codacesso', cod.replace(/^0+/, ''))
+                .limit(1)
+                .maybeSingle();
+            if (data2) {
+                aplicarResultado(data2);
+            } else {
+                resOk.style.display = 'none';
+                resNot.style.display = 'block';
+                hSeq.value = '';
+                hCodAcesso.value = '';
+                hUnidade.value = '';
+                descricao.value = '';
+                descricao.readOnly = false;
+                descricao.style.background = '';
+                descricao.focus();
+            }
+        }
+    } catch (err) {
+        // erro silencioso
+    }
 }
 
-/* LAYOUT */
-.container {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 26px 18px;
+function aplicarResultado(prod) {
+    resOk.style.display = 'block';
+    resNot.style.display = 'none';
+    hSeq.value = prod.seqproduto || '';
+    hCodAcesso.value = prod.codacesso || '';
+    hUnidade.value = prod.embalagem || 'UN';
+    resDesc.innerHTML =
+        `<span class="plu">PLU ${prod.seqproduto}</span>${prod.desccompleta}`;
+    resMeta.textContent =
+        `${prod.tipcodigo} · ${prod.embalagem} · ${prod.qtdembalagem} un/cx`;
+    descricao.value = prod.desccompleta;
+    descricao.readOnly = true;
+    descricao.style.background = '#f0f8f3';
+    $('qtd-recebida').focus();
 }
 
-.page-titulo {
-  font-size: 1.3rem;
-  font-weight: 800;
-  color: var(--azul);
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+function limparRes() {
+    resOk.style.display = 'none';
+    resNot.style.display = 'none';
+    descricao.readOnly = false;
+    descricao.style.background = '';
+    hSeq.value = '';
+    hCodAcesso.value = '';
+    hUnidade.value = '';
 }
 
-/* CARD */
-.card {
-  background: var(--branco);
-  border-radius: var(--radius);
-  box-shadow: var(--sombra);
-  padding: 22px 26px;
-  margin-bottom: 20px;
-}
-.card-titulo {
-  font-size: .98rem;
-  font-weight: 700;
-  color: var(--azul);
-  margin-bottom: 16px;
-  padding-bottom: 10px;
-  border-bottom: 2px solid var(--azul-claro);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+// ============================================================
+//  CÂMERA
+// ============================================================
+$('btn-cam').addEventListener('click', toggleCamera);
+$('btn-fechar-cam').addEventListener('click', pararCamera);
+
+function toggleCamera() {
+    cameraAberta ? pararCamera() : abrirCamera();
 }
 
-/* FORM */
-label {
-  display: block;
-  font-size: .78rem;
-  font-weight: 700;
-  color: var(--texto-md);
-  margin-bottom: 5px;
-  text-transform: uppercase;
-  letter-spacing: .4px;
-}
-input[type="text"],
-input[type="number"],
-input[type="email"],
-input[type="password"],
-select,
-textarea {
-  width: 100%;
-  padding: 10px 13px;
-  border: 1.5px solid var(--cinza-md);
-  border-radius: 7px;
-  font-size: .95rem;
-  color: var(--texto);
-  background: #fff;
-  transition: border .18s;
-  font-family: inherit;
-}
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: var(--azul-md);
-  box-shadow: 0 0 0 3px rgba(30, 77, 123, .1);
-}
-.form-row {
-  display: grid;
-  gap: 14px;
-  margin-bottom: 14px;
-}
-.cols2 {
-  grid-template-columns: 1fr 1fr;
-}
-.cols3 {
-  grid-template-columns: 2fr 1fr 1fr;
-}
-.cols4 {
-  grid-template-columns: 2fr 1fr 1fr 1fr;
-}
-.fg {
-  margin-bottom: 14px;
+function abrirCamera() {
+    const container = $('video-container');
+    container.style.display = 'block';
+    $('btn-cam').textContent = '✕';
+    html5QrCode = new Html5Qrcode('reader');
+    html5QrCode.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 280, height: 160 } },
+        (decoded) => {
+            inputCodBarras.value = decoded;
+            pararCamera();
+            buscarProduto(decoded);
+        },
+        () => {}
+    ).catch(() => {
+        alert('Câmera indisponível');
+        pararCamera();
+    });
+    cameraAberta = true;
 }
 
-/* BOTÕES */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 7px;
-  font-size: .92rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity .18s, transform .12s;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.btn:hover {
-  opacity: .87;
-  transform: translateY(-1px);
-}
-.btn:active {
-  transform: none;
-}
-.btn-azul {
-  background: var(--azul);
-  color: #fff;
-}
-.btn-laranja {
-  background: var(--laranja);
-  color: #fff;
-}
-.btn-verde {
-  background: var(--verde);
-  color: #fff;
-}
-.btn-cinza {
-  background: var(--cinza-md);
-  color: var(--texto);
-}
-.btn-danger {
-  background: var(--vermelho);
-  color: #fff;
-}
-.btn-sm {
-  padding: 6px 12px;
-  font-size: .82rem;
-}
-.btn-icon {
-  padding: 7px 10px;
-}
-.btn:disabled {
-  opacity: .5;
-  cursor: not-allowed;
-  transform: none;
-}
-.btn-login {
-  width: 100%;
-  padding: 13px;
-  margin-top: 20px;
-  font-size: 1rem;
-  letter-spacing: .3px;
+function pararCamera() {
+    if (html5QrCode) {
+        html5QrCode.stop().catch(() => {});
+        html5QrCode = null;
+    }
+    $('video-container').style.display = 'none';
+    $('btn-cam').textContent = '📷';
+    cameraAberta = false;
 }
 
-/* LISTA ITENS */
-.lista-itens {
-  margin-top: 4px;
-}
-.item-linha {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--cinza);
-  border-radius: 7px;
-  padding: 10px 14px;
-  margin-bottom: 7px;
-  border-left: 4px solid var(--azul-md);
-  animation: fadeIn .18s ease;
-}
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateX(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-.item-info {
-  flex: 1;
-  min-width: 0;
-}
-.item-desc {
-  font-weight: 700;
-  font-size: .93rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.item-meta {
-  font-size: .76rem;
-  color: var(--cinza-esc);
-  margin-top: 2px;
-}
-.item-qtds {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  font-size: .9rem;
-  flex-wrap: wrap;
-}
-.qtd-esp {
-  color: var(--texto-md);
-}
-.qtd-rec {
-  font-weight: 700;
-  color: var(--azul);
-}
-.div-ok {
-  color: var(--verde);
-  font-weight: 700;
-  font-size: .8rem;
-}
-.div-falta {
-  color: var(--vermelho);
-  font-weight: 700;
-  font-size: .8rem;
-}
-.div-sobra {
-  color: var(--laranja);
-  font-weight: 700;
-  font-size: .8rem;
+// ============================================================
+//  ADICIONAR ITEM
+// ============================================================
+$('btn-add').addEventListener('click', adicionarItem);
+descricao.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); adicionarItem(); }
+});
+$('qtd-recebida').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); adicionarItem(); }
+});
+
+function adicionarItem() {
+    const desc = descricao.value.trim();
+    const qtdRec = parseFloat($('qtd-recebida').value) || 0;
+    const cod = inputCodBarras.value.trim();
+    const seq = hSeq.value;
+    const codac = hCodAcesso.value;
+    const unidade = hUnidade.value || 'UN';
+
+    if (!desc) { highlight('descricao'); return; }
+    if (qtdRec <= 0) { highlight('qtd-recebida'); return; }
+
+    itens.push({
+        codacesso: codac || cod,
+        seqproduto: seq,
+        descricao: desc,
+        qtd_esperada: 0,
+        qtd_recebida: qtdRec,
+        unidade: unidade,
+        divergencia: '',
+    });
+
+    renderLista();
+    limparCamposNova();
 }
 
-/* ============================================================
-   EDIÇÃO DE QUANTIDADE NA LISTA
-   ============================================================ */
-.qtd-edit {
-  width: 80px;
-  padding: 4px 8px;
-  border: 2px solid var(--cinza-md);
-  border-radius: 5px;
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--azul);
-  background: white;
-  text-align: center;
-  transition: all 0.2s ease;
+// ============================================================
+//  RENDER LISTA
+// ============================================================
+function renderLista() {
+    const card = $('card-itens');
+    const lista = $('lista-itens');
+    card.style.display = itens.length ? 'block' : 'none';
+    
+    const totalQuantidade = itens.reduce((sum, item) => sum + item.qtd_recebida, 0);
+    $('badge-total').textContent = `${itens.length} item${itens.length !== 1 ? 's' : ''} (${totalQuantidade.toFixed(3)} un)`;
+
+    lista.innerHTML = itens.map((it, i) => {
+        return `
+            <div class="item-linha" style="border-left-color: #1e4d7b;">
+                <div class="item-info">
+                    <div class="item-desc">
+                        ${it.seqproduto ? `<span class="plu">PLU ${it.seqproduto}</span>` : ''}${it.descricao}
+                    </div>
+                    <div class="item-meta">${it.codacesso || 'Código manual'} · ${it.unidade}</div>
+                </div>
+                <div class="item-qtds">
+                    <span class="qtd-rec">
+                        <input type="number" 
+                               class="qtd-edit" 
+                               data-index="${i}" 
+                               value="${it.qtd_recebida}" 
+                               min="0.001" 
+                               step="0.001"
+                               title="Clique para editar a quantidade">
+                        <span style="font-size:0.7rem;color:var(--cinza-esc);">${it.unidade}</span>
+                    </span>
+                </div>
+                <button class="btn btn-danger btn-icon btn-sm" data-remover="${i}" title="Remover">✕</button>
+            </div>
+        `;
+    }).join('');
+
+    lista.querySelectorAll('.qtd-edit').forEach(input => {
+        input.addEventListener('change', function() {
+            const idx = parseInt(this.dataset.index);
+            const novoValor = parseFloat(this.value);
+            if (!isNaN(novoValor) && novoValor > 0) {
+                itens[idx].qtd_recebida = novoValor;
+                const totalQuantidade = itens.reduce((sum, item) => sum + item.qtd_recebida, 0);
+                $('badge-total').textContent = `${itens.length} item${itens.length !== 1 ? 's' : ''} (${totalQuantidade.toFixed(3)} un)`;
+            } else {
+                alert('Digite um valor válido maior que zero.');
+                this.value = itens[idx].qtd_recebida;
+            }
+        });
+
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                this.blur();
+            }
+        });
+
+        input.addEventListener('focus', function() {
+            this.select();
+        });
+    });
+
+    lista.querySelectorAll('[data-remover]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const idx = parseInt(btn.dataset.remover);
+            itens.splice(idx, 1);
+            renderLista();
+        });
+    });
 }
 
-.qtd-edit:hover {
-  border-color: var(--azul-md);
-  background: var(--azul-claro);
+function limparCamposNova() {
+    inputCodBarras.value = '';
+    descricao.value = '';
+    $('qtd-recebida').value = '1';
+    descricao.readOnly = false;
+    descricao.style.background = '';
+    resOk.style.display = 'none';
+    resNot.style.display = 'none';
+    hSeq.value = '';
+    hCodAcesso.value = '';
+    hUnidade.value = '';
+    inputCodBarras.focus();
 }
 
-.qtd-edit:focus {
-  outline: none;
-  border-color: var(--azul-md);
-  box-shadow: 0 0 0 3px rgba(30, 77, 123, 0.15);
-  background: white;
+$('btn-limpar').addEventListener('click', () => {
+    if (itens.length && !confirm('Limpar todos os itens?')) return;
+    itens.length = 0;
+    renderLista();
+    limparCamposNova();
+    recebimentoEmEdicao = null;
+    $('btn-salvar').textContent = '💾 Finalizar Conferência';
+});
+
+// ============================================================
+//  SALVAR CONFERÊNCIA
+// ============================================================
+$('btn-salvar').addEventListener('click', salvarConferencia);
+
+async function salvarConferencia() {
+    const fornecedor = $('fornecedor').value.trim();
+
+    if (!fornecedor) { highlight('fornecedor'); return; }
+    if (!itens.length) { alert('Adicione ao menos um item.'); return; }
+
+    const btn = $('btn-salvar');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span> Salvando...';
+
+    try {
+        if (recebimentoEmEdicao) {
+            const { data: recExistente, error: checkError } = await supabase
+                .from('recebimentos')
+                .select('criado_por')
+                .eq('id', recebimentoEmEdicao)
+                .single();
+            
+            if (checkError) throw checkError;
+            
+            if (recExistente.criado_por !== usuarioLogado) {
+                alert('❌ Você não pode editar esta conferência. Apenas o criador pode editá-la.');
+                btn.disabled = false;
+                btn.innerHTML = '💾 Finalizar Conferência';
+                return;
+            }
+
+            const { error: err1 } = await supabase
+                .from('recebimentos')
+                .update({ fornecedor, nota_fiscal: '', observacao: '' })
+                .eq('id', recebimentoEmEdicao);
+            if (err1) throw err1;
+
+            await supabase
+                .from('itens_recebimento')
+                .delete()
+                .eq('recebimento_id', recebimentoEmEdicao);
+
+            const itensParaInserir = itens.map(it => ({
+                recebimento_id: recebimentoEmEdicao,
+                codacesso: it.codacesso || '',
+                seqproduto: it.seqproduto || '',
+                descricao: it.descricao,
+                qtd_esperada: 0,
+                qtd_recebida: it.qtd_recebida,
+                unidade: it.unidade,
+                divergencia: '',
+            }));
+            const { error: errIns } = await supabase
+                .from('itens_recebimento')
+                .insert(itensParaInserir);
+            if (errIns) throw errIns;
+
+            alert('✅ Recebimento atualizado com sucesso!');
+            itens.length = 0;
+            renderLista();
+            limparCamposNova();
+            $('fornecedor').value = '';
+            recebimentoEmEdicao = null;
+            btn.innerHTML = '💾 Finalizar Conferência';
+            navegarPara('lista');
+        } else {
+            const { data: rec, error: err1 } = await supabase
+                .from('recebimentos')
+                .insert({ 
+                    fornecedor, 
+                    nota_fiscal: '', 
+                    observacao: '',
+                    criado_por: usuarioLogado
+                })
+                .select()
+                .single();
+            if (err1) throw err1;
+            const recId = rec.id;
+
+            const itensParaInserir = itens.map(it => ({
+                recebimento_id: recId,
+                codacesso: it.codacesso || '',
+                seqproduto: it.seqproduto || '',
+                descricao: it.descricao,
+                qtd_esperada: 0,
+                qtd_recebida: it.qtd_recebida,
+                unidade: it.unidade,
+                divergencia: '',
+            }));
+            const { error: err2 } = await supabase
+                .from('itens_recebimento')
+                .insert(itensParaInserir);
+            if (err2) throw err2;
+
+            $('modal-resumo').textContent = `${itens.length} item(s) conferido(s) da loja "${fornecedor}" por ${usuarioLogado}.`;
+            $('modal-ok').classList.add('aberto');
+
+            itens.length = 0;
+            renderLista();
+            limparCamposNova();
+            $('fornecedor').value = '';
+            recebimentoEmEdicao = null;
+            btn.innerHTML = '💾 Finalizar Conferência';
+        }
+    } catch (err) {
+        alert('Erro: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        if (!recebimentoEmEdicao) {
+            btn.innerHTML = '💾 Finalizar Conferência';
+        } else {
+            btn.innerHTML = '💾 Atualizar Conferência';
+        }
+    }
 }
 
-/* Remover setas de incremento/decremento */
-.qtd-edit::-webkit-inner-spin-button,
-.qtd-edit::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+// Fechar modal
+$('btn-nova-conf').addEventListener('click', () => {
+    $('modal-ok').classList.remove('aberto');
+    navegarPara('nova');
+});
+$('btn-ver-lista').addEventListener('click', () => {
+    $('modal-ok').classList.remove('aberto');
+    navegarPara('lista');
+});
+
+// ============================================================
+//  LISTA DE RECEBIMENTOS
+// ============================================================
+async function carregarRecebimentos() {
+    const container = $('lista-recebimentos');
+    container.innerHTML = '<p style="text-align:center;padding:20px;">Carregando...</p>';
+
+    const { data, error } = await supabase
+        .from('recebimentos')
+        .select('*')
+        .order('data_registro', { ascending: false });
+
+    if (error) {
+        container.innerHTML = `<div class="erro">Erro: ${error.message}</div>`;
+        return;
+    }
+
+    if (!data || data.length === 0) {
+        container.innerHTML = `<div class="vazio"><span class="vazio-ico">📭</span>Nenhum recebimento cadastrado.</div>`;
+        return;
+    }
+
+    let html = `
+        <div class="card" style="padding:0;overflow-x:auto;">
+            <table>
+                <thead><tr>
+                    <th>Loja</th>
+                    <th>Conferente</th>
+                    <th>Data</th>
+                    <th style="text-align:center;">Ações</th>
+                </tr></thead>
+                <tbody>
+    `;
+    data.forEach(rec => {
+        const dataFormatada = new Date(rec.data_registro).toLocaleString('pt-BR');
+        const criador = rec.criado_por || 'N/A';
+        const isCriador = criador === usuarioLogado;
+        
+        html += `
+            <tr>
+                <td><strong>${rec.fornecedor}</strong></td>
+                <td>👤 ${criador} ${isCriador ? '<span style="color:var(--verde);font-size:0.7rem;">(você)</span>' : ''}</td>
+                <td>${dataFormatada}</td>
+                <td style="text-align:center;white-space:nowrap;">
+                    <button class="btn btn-sm btn-azul" data-acao="ver" data-id="${rec.id}">👁️ Ver</button>
+                    ${isCriador ? 
+                        `<button class="btn btn-sm btn-laranja" data-acao="editar" data-id="${rec.id}">✏️ Editar</button>
+                         <button class="btn btn-sm btn-danger" data-acao="excluir" data-id="${rec.id}">🗑️</button>` :
+                        `<button class="btn btn-sm btn-cinza" disabled style="opacity:0.5;cursor:not-allowed;" title="Apenas o criador pode editar">🔒 Editar</button>
+                         <button class="btn btn-sm btn-cinza" disabled style="opacity:0.5;cursor:not-allowed;" title="Apenas o criador pode excluir">🔒</button>`
+                    }
+                </td>
+            </tr>
+        `;
+    });
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
 }
 
-.qtd-edit {
-  -moz-appearance: textfield;
+// ============================================================
+//  EVENTOS DA LISTA
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+    const container = $('lista-recebimentos');
+    if (!container) return;
+
+    container.addEventListener('click', function(e) {
+        const btn = e.target.closest('button[data-acao]');
+        if (!btn) return;
+        const id = parseInt(btn.dataset.id);
+        if (isNaN(id)) return;
+
+        switch (btn.dataset.acao) {
+            case 'ver':
+                verRecebimento(id);
+                break;
+            case 'editar':
+                editarRecebimento(id);
+                break;
+            case 'excluir':
+                excluirRecebimento(id);
+                break;
+        }
+    });
+});
+
+// ============================================================
+//  VER DETALHE
+// ============================================================
+async function verRecebimento(id) {
+    const { data: rec, error: e1 } = await supabase
+        .from('recebimentos')
+        .select('*')
+        .eq('id', id)
+        .single();
+    if (e1) { alert('Erro ao buscar recebimento: ' + e1.message); return; }
+
+    const { data: itensDB, error: e2 } = await supabase
+        .from('itens_recebimento')
+        .select('*')
+        .eq('recebimento_id', id);
+    if (e2) { alert('Erro ao buscar itens: ' + e2.message); return; }
+
+    const isCriador = rec.criado_por === usuarioLogado;
+    const criador = rec.criado_por || 'N/A';
+
+    let html = `
+        <p><strong>Loja:</strong> ${rec.fornecedor}</p>
+        <p><strong>Conferente:</strong> 👤 ${criador} ${isCriador ? '<span style="color:var(--verde);font-weight:700;">(você)</span>' : ''}</p>
+        <p><strong>Data:</strong> ${new Date(rec.data_registro).toLocaleString('pt-BR')}</p>
+        <hr style="margin:16px 0;">
+        <h4>Itens (${itensDB.length})</h4>
+        <ul style="list-style:none;padding:0;">
+    `;
+    if (!itensDB || itensDB.length === 0) {
+        html += '<li style="padding:6px 0;color:var(--cinza-esc);">Nenhum item encontrado para este recebimento.</li>';
+    } else {
+        itensDB.forEach(it => {
+            html += `
+                <li style="padding:6px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;">
+                    <span>${it.descricao} (${it.unidade})</span>
+                    <span style="font-weight:700;">${fmt(it.qtd_recebida)}</span>
+                </li>
+            `;
+        });
+    }
+    html += '</ul>';
+    $('detalhe-conteudo').innerHTML = html;
+    $('modal-detalhe').classList.add('aberto');
+    $('modal-detalhe').dataset.recId = id;
 }
 
-/* BADGES */
-.badge {
-  display: inline-block;
-  padding: 2px 9px;
-  border-radius: 20px;
-  font-size: .75rem;
-  font-weight: 700;
-}
-.badge-azul {
-  background: var(--azul-claro);
-  color: var(--azul);
-}
-.badge-verde {
-  background: var(--verde-claro);
-  color: var(--verde);
-}
-.badge-vermelho {
-  background: var(--vermelho-claro);
-  color: var(--vermelho);
-}
-.badge-laranja {
-  background: var(--laranja-claro);
-  color: #a35c00;
-}
-.badge-amarelo {
-  background: var(--amarelo-claro);
-  color: #7a5500;
+// ============================================================
+//  EDITAR RECEBIMENTO
+// ============================================================
+function editarRecebimento(id) {
+    (async () => {
+        const { data: rec, error: checkError } = await supabase
+            .from('recebimentos')
+            .select('*')
+            .eq('id', id)
+            .single();
+        
+        if (checkError) { alert('Erro ao buscar recebimento: ' + checkError.message); return; }
+        
+        if (rec.criado_por !== usuarioLogado) {
+            alert('❌ Você não pode editar esta conferência. Apenas o criador pode editá-la.');
+            return;
+        }
+
+        const { data: itensDB, error: e2 } = await supabase
+            .from('itens_recebimento')
+            .select('*')
+            .eq('recebimento_id', id);
+        if (e2) { alert('Erro ao buscar itens: ' + e2.message); return; }
+
+        $('fornecedor').value = rec.fornecedor;
+        itens.length = 0;
+        itensDB.forEach(it => {
+            itens.push({
+                codacesso: it.codacesso || '',
+                seqproduto: it.seqproduto || '',
+                descricao: it.descricao,
+                qtd_esperada: 0,
+                qtd_recebida: it.qtd_recebida || 0,
+                unidade: it.unidade || 'UN',
+                divergencia: '',
+            });
+        });
+        renderLista();
+        recebimentoEmEdicao = id;
+        navegarPara('nova');
+        $('btn-salvar').textContent = '💾 Atualizar Conferência';
+    })();
 }
 
-/* RESULTADO BUSCA */
-.resultado-card {
-  border-radius: 7px;
-  padding: 11px 15px;
-  margin-bottom: 12px;
-  display: none;
-}
-.resultado-ok {
-  background: var(--verde-claro);
-  border-left: 4px solid var(--verde);
-}
-.resultado-not {
-  background: var(--laranja-claro);
-  border-left: 4px solid var(--laranja);
-}
-.resultado-label {
-  font-size: .72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .4px;
-  margin-bottom: 4px;
-}
-.resultado-ok .resultado-label {
-  color: var(--verde);
-}
-.resultado-not .resultado-label {
-  color: #a35c00;
-}
-.resultado-desc {
-  font-weight: 700;
-  font-size: .97rem;
-  color: var(--azul);
+// ============================================================
+//  EXCLUIR RECEBIMENTO
+// ============================================================
+async function excluirRecebimento(id) {
+    const { data: rec, error: checkError } = await supabase
+        .from('recebimentos')
+        .select('criado_por')
+        .eq('id', id)
+        .single();
+    
+    if (checkError) { alert('Erro ao verificar permissão: ' + checkError.message); return; }
+    
+    if (rec.criado_por !== usuarioLogado) {
+        alert('❌ Você não pode excluir esta conferência. Apenas o criador pode excluí-la.');
+        return;
+    }
+
+    if (!confirm('Tem certeza que deseja excluir este recebimento?')) return;
+    try {
+        const { error } = await supabase
+            .from('recebimentos')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+        alert('Recebimento excluído.');
+        carregarRecebimentos();
+    } catch (err) {
+        alert('Erro: ' + err.message);
+    }
 }
 
-/* PLU */
-.plu {
-  display: inline-block;
-  background: var(--azul-claro);
-  color: var(--azul);
-  border-radius: 4px;
-  padding: 1px 7px;
-  font-size: .75rem;
-  font-weight: 800;
-  margin-right: 6px;
-}
+$('btn-excluir').addEventListener('click', () => {
+    const id = parseInt($('modal-detalhe').dataset.recId);
+    if (id) {
+        $('modal-detalhe').classList.remove('aberto');
+        excluirRecebimento(id);
+    }
+});
+$('btn-fechar-detalhe').addEventListener('click', () => {
+    $('modal-detalhe').classList.remove('aberto');
+});
 
-/* CÂMERA */
-#video-container {
-  display: none;
-  margin-top: 10px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid var(--azul-md);
-}
-#video-container video {
-  width: 100%;
-  display: block;
-}
-#reader {
-  width: 100%;
-}
+// ============================================================
+//  PRODUTOS – IMPORTAÇÃO CSV
+// ============================================================
+const formImportar = $('form-importar');
+const importStatus = $('import-status');
 
-/* TABELA */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: .9rem;
-}
-th {
-  background: var(--azul-claro);
-  color: var(--azul);
-  font-weight: 700;
-  padding: 10px 14px;
-  text-align: left;
-  white-space: nowrap;
-}
-td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--cinza-md);
-  vertical-align: middle;
-}
-tr:last-child td {
-  border-bottom: none;
-}
-tr:hover td {
-  background: #f7f9fd;
-}
-.lista-recebimentos {
-  overflow-x: auto;
-}
+formImportar.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fileInput = $('file-csv');
+    const file = fileInput.files[0];
+    if (!file) return;
 
-/* FLASH / ERRO */
-.erro {
-  background: var(--vermelho-claro);
-  color: #7b1a11;
-  border-left: 4px solid var(--vermelho);
-  border-radius: 6px;
-  padding: 10px 14px;
-  font-size: .88rem;
-  font-weight: 500;
-  margin-bottom: 16px;
-}
-.flash {
-  padding: 12px 18px;
-  border-radius: 7px;
-  margin-bottom: 16px;
-  font-weight: 500;
-  font-size: .93rem;
-}
-.flash.ok {
-  background: var(--verde-claro);
-  color: #145a32;
-  border-left: 4px solid var(--verde);
-}
-.flash.erro {
-  background: var(--vermelho-claro);
-  color: #7b1a11;
-  border-left: 4px solid var(--vermelho);
-}
+    importStatus.innerHTML = '<p>⏳ Processando...</p>';
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+        const text = ev.target.result;
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        const dataLines = lines.slice(1);
+        let count = 0;
+        for (const line of dataLines) {
+            const cols = line.split(';');
+            if (cols.length < 9) continue;
+            const [nomerazao, seqproduto, desccompleta, codacesso, tipcodigo, _, __, embalagem, qtdembalagem] = cols;
+            const cod = codacesso.trim();
+            if (!cod) continue;
+            try {
+                const { error } = await supabase
+                    .from('produtos')
+                    .upsert({
+                        codacesso: cod,
+                        seqproduto: seqproduto.trim(),
+                        desccompleta: desccompleta.trim(),
+                        tipcodigo: tipcodigo.trim(),
+                        embalagem: embalagem.trim(),
+                        qtdembalagem: qtdembalagem.trim(),
+                        nomerazao: ''
+                    }, { onConflict: 'codacesso' });
+                if (!error) count++;
+            } catch (err) {}
+        }
+        importStatus.innerHTML = `<div class="flash ok">✅ ${count} produtos importados/atualizados com sucesso!</div>`;
+        carregarTotalProdutos();
+        fileInput.value = '';
+    };
+    reader.readAsText(file, 'latin-1');
+});
 
-/* LOGIN */
-#page-login {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 80vh;
-}
-.login-box {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 28px rgba(0, 0, 0, .13);
-  padding: 44px 40px 36px;
-  width: 100%;
-  max-width: 370px;
-}
-.login-box .logo {
-  text-align: center;
-  margin-bottom: 30px;
-}
-.login-box .logo .ico {
-  font-size: 3rem;
-  display: block;
-  margin-bottom: 10px;
-}
-.login-box .logo h1 {
-  font-size: 1.25rem;
-  color: var(--azul);
-  font-weight: 800;
-}
-.login-box .logo p {
-  font-size: .82rem;
-  color: #8a9ab0;
-  margin-top: 5px;
-}
-.login-box .dica {
-  font-size: .73rem;
-  color: #a0aec0;
-  margin-top: 20px;
-  text-align: center;
-  line-height: 1.5;
-}
-.login-box .dica code {
-  background: #f2f4f7;
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-size: .85em;
-}
-
-/* MODAL */
-.modal-bg {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, .48);
-  z-index: 200;
-  align-items: center;
-  justify-content: center;
-}
-.modal-bg.aberto {
-  display: flex;
-}
-.modal {
-  background: #fff;
-  border-radius: var(--radius);
-  padding: 28px;
-  max-width: 700px;
-  width: 96%;
-  max-height: 88vh;
-  overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, .22);
-}
-.modal-titulo {
-  font-size: 1.05rem;
-  font-weight: 800;
-  color: var(--azul);
-  margin-bottom: 16px;
-  padding-bottom: 10px;
-  border-bottom: 2px solid var(--azul-claro);
-}
-.modal-footer {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-top: 20px;
-  padding-top: 14px;
-  border-top: 1px solid var(--cinza-md);
-}
-
-/* SPINNER */
-.spin {
-  display: inline-block;
-  width: 15px;
-  height: 15px;
-  border: 2px solid rgba(255, 255, 255, .4);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin .7s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* RESPONSIVIDADE */
-@media (max-width: 620px) {
-  .cols2,
-  .cols3,
-  .cols4 {
-    grid-template-columns: 1fr;
-  }
-  nav {
-    padding: 0 12px;
-  }
-  .card {
-    padding: 16px 14px;
-  }
-  .nav-links a span {
-    display: none;
-  }
-  .login-box {
-    padding: 30px 20px;
-  }
-  
-  /* Ajustes para edição de quantidade em mobile */
-  .qtd-edit {
-    width: 65px;
-    font-size: 0.8rem;
-    padding: 3px 5px;
-  }
-  
-  .item-linha {
-    flex-wrap: wrap;
-    padding: 8px 10px;
-  }
-  
-  .item-info {
-    flex: 1 1 100%;
-    margin-bottom: 4px;
-  }
-  
-  .item-qtds {
-    flex: 1;
-  }
+async function carregarTotalProdutos() {
+    const { count, error } = await supabase
+        .from('produtos')
+        .select('*', { count: 'exact', head: true });
+    if (!error) {
+        $('total-produtos').textContent = count;
+    }
 }
