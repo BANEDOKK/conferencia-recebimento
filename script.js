@@ -1,7 +1,8 @@
 // ============================================================
 //  SCRIPT PRINCIPAL – Conferência Eletro (Supabase)
 //  COM DETECÇÃO AUTOMÁTICA DE ESTRUTURA DA TABELA
-//  E EDIÇÃO DE QUANTIDADE NA LISTA
+//  EDIÇÃO DE QUANTIDADE NA LISTA
+//  CONTROLE DE USUÁRIO - APENAS O CRIADOR PODE EDITAR
 // ============================================================
 
 // --- Estado global ---
@@ -10,6 +11,7 @@ let html5QrCode = null;
 let cameraAberta = false;
 let buscaTimeout = null;
 let recebimentoEmEdicao = null;
+let usuarioLogado = null;
 
 // --- Elementos DOM ---
 const $ = (id) => document.getElementById(id);
@@ -186,8 +188,9 @@ formLogin.addEventListener('submit', async (e) => {
             const senhaCorreta = data[TABELA_CONFIG.senhaField] === senha;
             
             if (senhaCorreta) {
+                usuarioLogado = data[TABELA_CONFIG.usuarioField];
                 sessionStorage.setItem('user', JSON.stringify({ 
-                    usuario: data[TABELA_CONFIG.usuarioField] 
+                    usuario: usuarioLogado 
                 }));
                 mostrarPainel();
             } else {
@@ -211,6 +214,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const user = sessionStorage.getItem('user');
     if (user) {
+        const parsed = JSON.parse(user);
+        usuarioLogado = parsed.usuario;
         mostrarPainel();
     }
 });
@@ -218,6 +223,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // --- Logout ---
 $('btn-sair').addEventListener('click', () => {
     sessionStorage.removeItem('user');
+    usuarioLogado = null;
     document.querySelectorAll('section').forEach(s => s.style.display = 'none');
     $('main-nav').style.display = 'none';
     $('page-login').style.display = 'block';
@@ -457,7 +463,6 @@ function renderLista() {
     const lista = $('lista-itens');
     card.style.display = itens.length ? 'block' : 'none';
     
-    // Calcular total de itens e quantidade
     const totalQuantidade = itens.reduce((sum, item) => sum + item.qtd_recebida, 0);
     $('badge-total').textContent = `${itens.length} item${itens.length !== 1 ? 's' : ''} (${totalQuantidade.toFixed(3)} un)`;
 
@@ -487,14 +492,12 @@ function renderLista() {
         `;
     }).join('');
 
-    // Event listener para edição de quantidade
     lista.querySelectorAll('.qtd-edit').forEach(input => {
         input.addEventListener('change', function() {
             const idx = parseInt(this.dataset.index);
             const novoValor = parseFloat(this.value);
             if (!isNaN(novoValor) && novoValor > 0) {
                 itens[idx].qtd_recebida = novoValor;
-                // Atualizar o badge de total
                 const totalQuantidade = itens.reduce((sum, item) => sum + item.qtd_recebida, 0);
                 $('badge-total').textContent = `${itens.length} item${itens.length !== 1 ? 's' : ''} (${totalQuantidade.toFixed(3)} un)`;
             } else {
@@ -514,7 +517,6 @@ function renderLista() {
         });
     });
 
-    // Event listener para remover item
     lista.querySelectorAll('[data-remover]').forEach(btn => {
         btn.addEventListener('click', () => {
             const idx = parseInt(btn.dataset.remover);
@@ -564,6 +566,22 @@ async function salvarConferencia() {
 
     try {
         if (recebimentoEmEdicao) {
+            // --- EDIÇÃO - Verifica se o usuário é o criador ---
+            const { data: recExistente, error: checkError } = await supabase
+                .from('recebimentos')
+                .select('criado_por')
+                .eq('id', recebimentoEmEdicao)
+                .single();
+            
+            if (checkError) throw checkError;
+            
+            if (recExistente.criado_por !== usuarioLogado) {
+                alert('❌ Você não pode editar esta conferência. Apenas o criador pode editá-la.');
+                btn.disabled = false;
+                btn.innerHTML = '💾 Finalizar Conferência';
+                return;
+            }
+
             const { error: err1 } = await supabase
                 .from('recebimentos')
                 .update({ fornecedor, nota_fiscal: '', observacao: '' })
@@ -599,9 +617,15 @@ async function salvarConferencia() {
             btn.innerHTML = '💾 Finalizar Conferência';
             navegarPara('lista');
         } else {
+            // --- NOVO - Salva com o nome do usuário ---
             const { data: rec, error: err1 } = await supabase
                 .from('recebimentos')
-                .insert({ fornecedor, nota_fiscal: '', observacao: '' })
+                .insert({ 
+                    fornecedor, 
+                    nota_fiscal: '', 
+                    observacao: '',
+                    criado_por: usuarioLogado
+                })
                 .select()
                 .single();
             if (err1) throw err1;
@@ -622,7 +646,7 @@ async function salvarConferencia() {
                 .insert(itensParaInserir);
             if (err2) throw err2;
 
-            $('modal-resumo').textContent = `${itens.length} item(s) conferido(s) da loja "${fornecedor}".`;
+            $('modal-resumo').textContent = `${itens.length} item(s) conferido(s) da loja "${fornecedor}" por ${usuarioLogado}.`;
             $('modal-ok').classList.add('aberto');
 
             itens.length = 0;
@@ -682,6 +706,7 @@ async function carregarRecebimentos() {
             <table>
                 <thead><tr>
                     <th>Loja</th>
+                    <th>Conferente</th>
                     <th>Data</th>
                     <th style="text-align:center;">Ações</th>
                 </tr></thead>
@@ -689,14 +714,29 @@ async function carregarRecebimentos() {
     `;
     data.forEach(rec => {
         const dataFormatada = new Date(rec.data_registro).toLocaleString('pt-BR');
+        const criador = rec.criado_por || 'N/A';
+        const isCriador = criador === usuarioLogado;
+        
         html += `
             <tr>
                 <td><strong>${rec.fornecedor}</strong></td>
+                <td>
+                    <span class="conferente ${isCriador ? 'conferente-meu' : 'conferente-outro'}">
+                        👤 ${criador}
+                        ${isCriador ? ' <span style="font-size:0.7rem;color:var(--verde);">(você)</span>' : ''}
+                    </span>
+                </td>
                 <td>${dataFormatada}</td>
                 <td style="text-align:center;white-space:nowrap;">
                     <button class="btn btn-sm btn-azul" data-acao="ver" data-id="${rec.id}">👁️ Ver</button>
-                    <button class="btn btn-sm btn-laranja" data-acao="editar" data-id="${rec.id}">✏️ Editar</button>
-                    <button class="btn btn-sm btn-danger" data-acao="excluir" data-id="${rec.id}">🗑️</button>
+                    ${isCriador ? 
+                        `<button class="btn btn-sm btn-laranja" data-acao="editar" data-id="${rec.id}">✏️ Editar</button>` :
+                        `<button class="btn btn-sm btn-cinza" disabled style="opacity:0.5;cursor:not-allowed;" title="Apenas o criador pode editar">🔒 Editar</button>`
+                    }
+                    ${isCriador ? 
+                        `<button class="btn btn-sm btn-danger" data-acao="excluir" data-id="${rec.id}">🗑️</button>` :
+                        `<button class="btn btn-sm btn-cinza" disabled style="opacity:0.5;cursor:not-allowed;" title="Apenas o criador pode excluir">🔒</button>`
+                    }
                 </td>
             </tr>
         `;
@@ -749,8 +789,12 @@ async function verRecebimento(id) {
         .eq('recebimento_id', id);
     if (e2) { alert('Erro ao buscar itens: ' + e2.message); return; }
 
+    const isCriador = rec.criado_por === usuarioLogado;
+    const criador = rec.criado_por || 'N/A';
+
     let html = `
         <p><strong>Loja:</strong> ${rec.fornecedor}</p>
+        <p><strong>Conferente:</strong> 👤 ${criador} ${isCriador ? '<span style="color:var(--verde);font-weight:700;">(você)</span>' : ''}</p>
         <p><strong>Data:</strong> ${new Date(rec.data_registro).toLocaleString('pt-BR')}</p>
         <hr style="margin:16px 0;">
         <h4>Itens (${itensDB.length})</h4>
@@ -775,16 +819,24 @@ async function verRecebimento(id) {
 }
 
 // ============================================================
-//  EDITAR RECEBIMENTO
+//  EDITAR RECEBIMENTO - COM VALIDAÇÃO
 // ============================================================
 function editarRecebimento(id) {
     (async () => {
-        const { data: rec, error: e1 } = await supabase
+        // Verifica se o usuário é o criador
+        const { data: rec, error: checkError } = await supabase
             .from('recebimentos')
             .select('*')
             .eq('id', id)
             .single();
-        if (e1) { alert('Erro ao buscar recebimento: ' + e1.message); return; }
+        
+        if (checkError) { alert('Erro ao buscar recebimento: ' + checkError.message); return; }
+        
+        if (rec.criado_por !== usuarioLogado) {
+            alert('❌ Você não pode editar esta conferência. Apenas o criador (${rec.criado_por}) pode editá-la.');
+            return;
+        }
+
         const { data: itensDB, error: e2 } = await supabase
             .from('itens_recebimento')
             .select('*')
@@ -812,9 +864,23 @@ function editarRecebimento(id) {
 }
 
 // ============================================================
-//  EXCLUIR RECEBIMENTO
+//  EXCLUIR RECEBIMENTO - COM VALIDAÇÃO
 // ============================================================
 async function excluirRecebimento(id) {
+    // Verifica se o usuário é o criador
+    const { data: rec, error: checkError } = await supabase
+        .from('recebimentos')
+        .select('criado_por')
+        .eq('id', id)
+        .single();
+    
+    if (checkError) { alert('Erro ao verificar permissão: ' + checkError.message); return; }
+    
+    if (rec.criado_por !== usuarioLogado) {
+        alert('❌ Você não pode excluir esta conferência. Apenas o criador pode excluí-la.');
+        return;
+    }
+
     if (!confirm('Tem certeza que deseja excluir este recebimento?')) return;
     try {
         const { error } = await supabase
@@ -852,52 +918,4 @@ formImportar.addEventListener('submit', async (e) => {
     const file = fileInput.files[0];
     if (!file) return;
 
-    importStatus.innerHTML = '<p>⏳ Processando...</p>';
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-        const text = ev.target.result;
-        const lines = text.split('\n').filter(line => line.trim() !== '');
-        const dataLines = lines.slice(1);
-        let count = 0;
-        for (const line of dataLines) {
-            const cols = line.split(';');
-            if (cols.length < 9) continue;
-            const [nomerazao, seqproduto, desccompleta, codacesso, tipcodigo, _, __, embalagem, qtdembalagem] = cols;
-            const cod = codacesso.trim();
-            if (!cod) continue;
-            try {
-                const { error } = await supabase
-                    .from('produtos')
-                    .upsert({
-                        codacesso: cod,
-                        seqproduto: seqproduto.trim(),
-                        desccompleta: desccompleta.trim(),
-                        tipcodigo: tipcodigo.trim(),
-                        embalagem: embalagem.trim(),
-                        qtdembalagem: qtdembalagem.trim(),
-                        nomerazao: ''
-                    }, { onConflict: 'codacesso' });
-                if (!error) count++;
-            } catch (err) { console.error(err); }
-        }
-        importStatus.innerHTML = `<div class="flash ok">✅ ${count} produtos importados/atualizados com sucesso!</div>`;
-        carregarTotalProdutos();
-        fileInput.value = '';
-    };
-    reader.readAsText(file, 'latin-1');
-});
-
-async function carregarTotalProdutos() {
-    const { count, error } = await supabase
-        .from('produtos')
-        .select('*', { count: 'exact', head: true });
-    if (!error) {
-        $('total-produtos').textContent = count;
-    }
-}
-
-// ============================================================
-//  INICIALIZAÇÃO
-// ============================================================
-console.log('✅ Aplicação inicializada com sucesso!');
-console.log('📋 Configuração da tabela usuarios:', TABELA_CONFIG);
+    importStatus.innerHTML = '<p
