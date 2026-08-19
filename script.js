@@ -1,6 +1,7 @@
 // ============================================================
 //  SCRIPT PRINCIPAL – Conferência Eletro (Supabase)
 //  CAMPO DE SENHA: senha_hash
+//  COM CAMPO MODELO OPCIONAL
 // ============================================================
 
 // --- Estado global ---
@@ -100,7 +101,7 @@ formCadastroEl.addEventListener('submit', async (e) => {
 });
 
 // ============================================================
-//  LOGIN - CAMPO CORRETO: senha_hash
+//  LOGIN
 // ============================================================
 const formLogin = $('form-login');
 const loginErro = $('login-erro');
@@ -174,6 +175,7 @@ $('btn-sair').addEventListener('click', () => {
     renderLista();
     limparCamposNova();
     $('fornecedor').value = '';
+    $('modelo').value = '';
 });
 
 function mostrarPainel() {
@@ -469,6 +471,7 @@ function limparCamposNova() {
     inputCodBarras.value = '';
     descricao.value = '';
     $('qtd-recebida').value = '1';
+    $('modelo').value = '';
     descricao.readOnly = false;
     descricao.style.background = '';
     resOk.style.display = 'none';
@@ -495,6 +498,7 @@ $('btn-salvar').addEventListener('click', salvarConferencia);
 
 async function salvarConferencia() {
     const fornecedor = $('fornecedor').value.trim();
+    const modelo = $('modelo').value.trim();
 
     if (!fornecedor) { highlight('fornecedor'); return; }
     if (!itens.length) { alert('Adicione ao menos um item.'); return; }
@@ -522,7 +526,12 @@ async function salvarConferencia() {
 
             const { error: err1 } = await supabase
                 .from('recebimentos')
-                .update({ fornecedor, nota_fiscal: '', observacao: '' })
+                .update({ 
+                    fornecedor, 
+                    modelo: modelo || null,
+                    nota_fiscal: '', 
+                    observacao: '' 
+                })
                 .eq('id', recebimentoEmEdicao);
             if (err1) throw err1;
 
@@ -551,6 +560,7 @@ async function salvarConferencia() {
             renderLista();
             limparCamposNova();
             $('fornecedor').value = '';
+            $('modelo').value = '';
             recebimentoEmEdicao = null;
             btn.innerHTML = '💾 Finalizar Conferência';
             navegarPara('lista');
@@ -559,6 +569,7 @@ async function salvarConferencia() {
                 .from('recebimentos')
                 .insert({ 
                     fornecedor, 
+                    modelo: modelo || null,
                     nota_fiscal: '', 
                     observacao: '',
                     criado_por: usuarioLogado
@@ -590,6 +601,7 @@ async function salvarConferencia() {
             renderLista();
             limparCamposNova();
             $('fornecedor').value = '';
+            $('modelo').value = '';
             recebimentoEmEdicao = null;
             btn.innerHTML = '💾 Finalizar Conferência';
         }
@@ -642,6 +654,7 @@ async function carregarRecebimentos() {
             <table>
                 <thead><tr>
                     <th>Loja</th>
+                    <th>Modelo</th>
                     <th>Conferente</th>
                     <th>Data</th>
                     <th style="text-align:center;">Ações</th>
@@ -656,6 +669,7 @@ async function carregarRecebimentos() {
         html += `
             <tr>
                 <td><strong>${rec.fornecedor}</strong></td>
+                <td>${rec.modelo ? '📱 ' + rec.modelo : '-'}</td>
                 <td>👤 ${criador} ${isCriador ? '<span style="color:var(--verde);font-size:0.7rem;">(você)</span>' : ''}</td>
                 <td>${dataFormatada}</td>
                 <td style="text-align:center;white-space:nowrap;">
@@ -723,6 +737,7 @@ async function verRecebimento(id) {
 
     let html = `
         <p><strong>Loja:</strong> ${rec.fornecedor}</p>
+        ${rec.modelo ? `<p><strong>Modelo:</strong> 📱 ${rec.modelo}</p>` : ''}
         <p><strong>Conferente:</strong> 👤 ${criador} ${isCriador ? '<span style="color:var(--verde);font-weight:700;">(você)</span>' : ''}</p>
         <p><strong>Data:</strong> ${new Date(rec.data_registro).toLocaleString('pt-BR')}</p>
         <hr style="margin:16px 0;">
@@ -772,6 +787,7 @@ function editarRecebimento(id) {
         if (e2) { alert('Erro ao buscar itens: ' + e2.message); return; }
 
         $('fornecedor').value = rec.fornecedor;
+        $('modelo').value = rec.modelo || '';
         itens.length = 0;
         itensDB.forEach(it => {
             itens.push({
