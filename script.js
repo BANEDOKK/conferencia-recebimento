@@ -1,5 +1,6 @@
 // ============================================================
 //  SCRIPT PRINCIPAL – Conferência Eletro (Supabase)
+//  CAMPO DE SENHA: senha_hash
 // ============================================================
 
 // --- Estado global ---
@@ -77,7 +78,10 @@ formCadastroEl.addEventListener('submit', async (e) => {
 
         const { error: insertError } = await supabase
             .from('usuarios')
-            .insert({ usuario, senha });
+            .insert({ 
+                usuario: usuario, 
+                senha_hash: senha 
+            });
 
         if (insertError) throw insertError;
 
@@ -96,7 +100,7 @@ formCadastroEl.addEventListener('submit', async (e) => {
 });
 
 // ============================================================
-//  LOGIN - CORRIGIDO
+//  LOGIN - CAMPO CORRETO: senha_hash
 // ============================================================
 const formLogin = $('form-login');
 const loginErro = $('login-erro');
@@ -114,14 +118,13 @@ formLogin.addEventListener('submit', async (e) => {
     }
 
     try {
-        // Buscar usuário
         const { data, error } = await supabase
             .from('usuarios')
-            .select('*')
+            .select('usuario, senha_hash')
             .eq('usuario', usuario);
 
         if (error) {
-            loginErro.textContent = '❌ Erro ao conectar ao banco.';
+            loginErro.textContent = '❌ Erro ao conectar ao banco: ' + error.message;
             loginErro.style.display = 'block';
             return;
         }
@@ -134,8 +137,7 @@ formLogin.addEventListener('submit', async (e) => {
 
         const user = data[0];
 
-        // Verificar senha
-        if (user.senha === senha) {
+        if (user.senha_hash === senha) {
             usuarioLogado = user.usuario;
             sessionStorage.setItem('user', JSON.stringify({ usuario: usuarioLogado }));
             mostrarPainel();
@@ -286,9 +288,7 @@ async function buscarProduto(cod) {
                 descricao.focus();
             }
         }
-    } catch (err) {
-        // erro silencioso
-    }
+    } catch (err) {}
 }
 
 function aplicarResultado(prod) {
