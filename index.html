@@ -66,14 +66,10 @@
 
       <div class="card">
         <div class="card-titulo">🏭 Dados do Recebimento</div>
-        <div class="form-row cols2">
+        <div class="form-row">
           <div class="fg">
             <label>LOJA *</label>
             <input type="text" id="fornecedor" placeholder="Número ou nome da loja..." autocomplete="off" />
-          </div>
-          <div class="fg">
-            <label>MODELO (opcional)</label>
-            <input type="text" id="modelo" placeholder="Ex: Galaxy S24, iPhone 15, etc..." autocomplete="off" />
           </div>
         </div>
       </div>
@@ -117,6 +113,11 @@
             <input type="text" id="descricao" placeholder="Preenchida automaticamente ao bipar, ou digite manualmente" style="flex:1" autocomplete="off" />
             <button class="btn btn-azul" id="btn-add">+ Adicionar</button>
           </div>
+        </div>
+
+        <div class="fg">
+          <label>MODELO (opcional)</label>
+          <input type="text" id="modelo-item" placeholder="Ex: Galaxy S24, iPhone 15, Moto G, etc..." autocomplete="off" />
         </div>
 
         <input type="hidden" id="h-seqproduto" />

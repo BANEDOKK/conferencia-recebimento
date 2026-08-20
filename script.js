@@ -1,7 +1,7 @@
 // ============================================================
 //  SCRIPT PRINCIPAL – Conferência Eletro (Supabase)
 //  CAMPO DE SENHA: senha_hash
-//  COM CAMPO MODELO OPCIONAL
+//  COM CAMPO MODELO POR ITEM (OPCIONAL)
 // ============================================================
 
 // --- Estado global ---
@@ -175,7 +175,6 @@ $('btn-sair').addEventListener('click', () => {
     renderLista();
     limparCamposNova();
     $('fornecedor').value = '';
-    $('modelo').value = '';
 });
 
 function mostrarPainel() {
@@ -240,6 +239,7 @@ const hSeq = $('h-seqproduto');
 const hCodAcesso = $('h-codacesso');
 const hUnidade = $('h-unidade');
 const descricao = $('descricao');
+const modeloItem = $('modelo-item');
 
 inputCodBarras.addEventListener('input', function () {
     clearTimeout(buscaTimeout);
@@ -370,6 +370,9 @@ descricao.addEventListener('keydown', (e) => {
 $('qtd-recebida').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); adicionarItem(); }
 });
+modeloItem.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); adicionarItem(); }
+});
 
 function adicionarItem() {
     const desc = descricao.value.trim();
@@ -378,6 +381,7 @@ function adicionarItem() {
     const seq = hSeq.value;
     const codac = hCodAcesso.value;
     const unidade = hUnidade.value || 'UN';
+    const modelo = modeloItem.value.trim();
 
     if (!desc) { highlight('descricao'); return; }
     if (qtdRec <= 0) { highlight('qtd-recebida'); return; }
@@ -389,6 +393,7 @@ function adicionarItem() {
         qtd_esperada: 0,
         qtd_recebida: qtdRec,
         unidade: unidade,
+        modelo: modelo || null,
         divergencia: '',
     });
 
@@ -413,6 +418,7 @@ function renderLista() {
                 <div class="item-info">
                     <div class="item-desc">
                         ${it.seqproduto ? `<span class="plu">PLU ${it.seqproduto}</span>` : ''}${it.descricao}
+                        ${it.modelo ? `<span style="font-size:0.7rem;color:var(--azul-md);display:block;margin-top:2px;">📱 ${it.modelo}</span>` : ''}
                     </div>
                     <div class="item-meta">${it.codacesso || 'Código manual'} · ${it.unidade}</div>
                 </div>
@@ -471,7 +477,7 @@ function limparCamposNova() {
     inputCodBarras.value = '';
     descricao.value = '';
     $('qtd-recebida').value = '1';
-    $('modelo').value = '';
+    modeloItem.value = '';
     descricao.readOnly = false;
     descricao.style.background = '';
     resOk.style.display = 'none';
@@ -498,7 +504,6 @@ $('btn-salvar').addEventListener('click', salvarConferencia);
 
 async function salvarConferencia() {
     const fornecedor = $('fornecedor').value.trim();
-    const modelo = $('modelo').value.trim();
 
     if (!fornecedor) { highlight('fornecedor'); return; }
     if (!itens.length) { alert('Adicione ao menos um item.'); return; }
@@ -528,7 +533,6 @@ async function salvarConferencia() {
                 .from('recebimentos')
                 .update({ 
                     fornecedor, 
-                    modelo: modelo || null,
                     nota_fiscal: '', 
                     observacao: '' 
                 })
@@ -548,6 +552,7 @@ async function salvarConferencia() {
                 qtd_esperada: 0,
                 qtd_recebida: it.qtd_recebida,
                 unidade: it.unidade,
+                modelo: it.modelo || null,
                 divergencia: '',
             }));
             const { error: errIns } = await supabase
@@ -560,7 +565,6 @@ async function salvarConferencia() {
             renderLista();
             limparCamposNova();
             $('fornecedor').value = '';
-            $('modelo').value = '';
             recebimentoEmEdicao = null;
             btn.innerHTML = '💾 Finalizar Conferência';
             navegarPara('lista');
@@ -569,7 +573,6 @@ async function salvarConferencia() {
                 .from('recebimentos')
                 .insert({ 
                     fornecedor, 
-                    modelo: modelo || null,
                     nota_fiscal: '', 
                     observacao: '',
                     criado_por: usuarioLogado
@@ -587,6 +590,7 @@ async function salvarConferencia() {
                 qtd_esperada: 0,
                 qtd_recebida: it.qtd_recebida,
                 unidade: it.unidade,
+                modelo: it.modelo || null,
                 divergencia: '',
             }));
             const { error: err2 } = await supabase
@@ -601,7 +605,6 @@ async function salvarConferencia() {
             renderLista();
             limparCamposNova();
             $('fornecedor').value = '';
-            $('modelo').value = '';
             recebimentoEmEdicao = null;
             btn.innerHTML = '💾 Finalizar Conferência';
         }
@@ -654,7 +657,6 @@ async function carregarRecebimentos() {
             <table>
                 <thead><tr>
                     <th>Loja</th>
-                    <th>Modelo</th>
                     <th>Conferente</th>
                     <th>Data</th>
                     <th style="text-align:center;">Ações</th>
@@ -669,7 +671,6 @@ async function carregarRecebimentos() {
         html += `
             <tr>
                 <td><strong>${rec.fornecedor}</strong></td>
-                <td>${rec.modelo ? '📱 ' + rec.modelo : '-'}</td>
                 <td>👤 ${criador} ${isCriador ? '<span style="color:var(--verde);font-size:0.7rem;">(você)</span>' : ''}</td>
                 <td>${dataFormatada}</td>
                 <td style="text-align:center;white-space:nowrap;">
@@ -737,7 +738,6 @@ async function verRecebimento(id) {
 
     let html = `
         <p><strong>Loja:</strong> ${rec.fornecedor}</p>
-        ${rec.modelo ? `<p><strong>Modelo:</strong> 📱 ${rec.modelo}</p>` : ''}
         <p><strong>Conferente:</strong> 👤 ${criador} ${isCriador ? '<span style="color:var(--verde);font-weight:700;">(você)</span>' : ''}</p>
         <p><strong>Data:</strong> ${new Date(rec.data_registro).toLocaleString('pt-BR')}</p>
         <hr style="margin:16px 0;">
@@ -749,8 +749,11 @@ async function verRecebimento(id) {
     } else {
         itensDB.forEach(it => {
             html += `
-                <li style="padding:6px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;">
-                    <span>${it.descricao} (${it.unidade})</span>
+                <li style="padding:6px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;flex-wrap:wrap;">
+                    <span>
+                        ${it.descricao} (${it.unidade})
+                        ${it.modelo ? `<span style="font-size:0.8rem;color:var(--azul-md);display:block;">📱 ${it.modelo}</span>` : ''}
+                    </span>
                     <span style="font-weight:700;">${fmt(it.qtd_recebida)}</span>
                 </li>
             `;
@@ -787,7 +790,6 @@ function editarRecebimento(id) {
         if (e2) { alert('Erro ao buscar itens: ' + e2.message); return; }
 
         $('fornecedor').value = rec.fornecedor;
-        $('modelo').value = rec.modelo || '';
         itens.length = 0;
         itensDB.forEach(it => {
             itens.push({
@@ -797,6 +799,7 @@ function editarRecebimento(id) {
                 qtd_esperada: 0,
                 qtd_recebida: it.qtd_recebida || 0,
                 unidade: it.unidade || 'UN',
+                modelo: it.modelo || null,
                 divergencia: '',
             });
         });
