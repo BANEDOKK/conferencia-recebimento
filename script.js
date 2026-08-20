@@ -371,9 +371,11 @@ descricao.addEventListener('keydown', (e) => {
 $('qtd-recebida').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); adicionarItem(); }
 });
-modeloItem.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); adicionarItem(); }
-});
+if (modeloItem) {
+    modeloItem.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); adicionarItem(); }
+    });
+}
 
 function adicionarItem() {
     const desc = descricao.value.trim();
@@ -382,7 +384,7 @@ function adicionarItem() {
     const seq = hSeq.value;
     const codac = hCodAcesso.value;
     const unidade = hUnidade.value || 'UN';
-    const modelo = modeloItem.value.trim();
+    const modelo = modeloItem ? modeloItem.value.trim() : '';
 
     if (!desc) { highlight('descricao'); return; }
     if (qtdRec <= 0) { highlight('qtd-recebida'); return; }
@@ -478,7 +480,7 @@ function limparCamposNova() {
     inputCodBarras.value = '';
     descricao.value = '';
     $('qtd-recebida').value = '1';
-    modeloItem.value = '';
+    if (modeloItem) modeloItem.value = '';
     descricao.readOnly = false;
     descricao.style.background = '';
     resOk.style.display = 'none';
@@ -912,15 +914,19 @@ async function carregarTotalProdutos() {
 // ============================================================
 //  EXPORTAR CSV - FORMATO SUPABASE
 // ============================================================
-$('btn-exportar-csv').addEventListener('click', exportarCSV);
+const btnExportar = $('btn-exportar-csv');
+if (btnExportar) {
+    btnExportar.addEventListener('click', exportarCSV);
+}
 
 async function exportarCSV() {
     const btn = $('btn-exportar-csv');
+    if (!btn) return;
+    
     btn.disabled = true;
     btn.innerHTML = '<span class="spin"></span> Exportando...';
 
     try {
-        // Buscar todos os recebimentos
         const { data: recebimentos, error: err1 } = await supabase
             .from('recebimentos')
             .select('*')
@@ -931,4 +937,71 @@ async function exportarCSV() {
         if (!recebimentos || recebimentos.length === 0) {
             alert('Nenhum recebimento para exportar.');
             btn.disabled = false;
-            btn.innerHTML
+            btn.innerHTML = '📥 Exportar CSV';
+            return;
+        }
+
+        const { data: todosItens, error: err2 } = await supabase
+            .from('itens_recebimento')
+            .select('*')
+            .order('recebimento_id');
+
+        if (err2) throw err2;
+
+        const itensPorRecebimento = {};
+        todosItens.forEach(item => {
+            if (!itensPorRecebimento[item.recebimento_id]) {
+                itensPorRecebimento[item.recebimento_id] = [];
+            }
+            itensPorRecebimento[item.recebimento_id].push(item);
+        });
+
+        let csv = '\uFEFF';
+        csv += '"id";"codacesso";"seqproduto";"descricao";"qtd_esperada";"qtd_recebida";"unidade";"divergencia";"created_at";"recebimento_id";"modelo";"loja";"conferente"\n';
+
+        recebimentos.forEach(rec => {
+            const itens = itensPorRecebimento[rec.id] || [];
+            const dataFormatada = new Date(rec.data_registro).toISOString();
+            const criador = rec.criado_por || 'N/A';
+
+            if (itens.length === 0) {
+                csv += `"${rec.id}";"";"";"";"0.000";"0.000";"";"";"${dataFormatada}";"${rec.id}";"";"${rec.fornecedor}";"${criador}"\n`;
+            } else {
+                itens.forEach((item) => {
+                    const qtdEsperada = (item.qtd_esperada || 0).toFixed(3);
+                    const qtdRecebida = (item.qtd_recebida || 0).toFixed(3);
+                    
+                    csv += `"${item.id || ''}";`;
+                    csv += `"${item.codacesso || ''}";`;
+                    csv += `"${item.seqproduto || ''}";`;
+                    csv += `"${(item.descricao || '').replace(/"/g, '""')}";`;
+                    csv += `"${qtdEsperada}";`;
+                    csv += `"${qtdRecebida}";`;
+                    csv += `"${item.unidade || 'UN'}";`;
+                    csv += `"${item.divergencia || ''}";`;
+                    csv += `"${dataFormatada}";`;
+                    csv += `"${rec.id}";`;
+                    csv += `"${item.modelo || ''}";`;
+                    csv += `"${rec.fornecedor || ''}";`;
+                    csv += `"${criador}"\n`;
+                });
+            }
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = `itens_recebimento_${new Date().toISOString().slice(0,10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+    } catch (err) {
+        alert('Erro ao exportar: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '📥 Exportar CSV';
+    }
+}
