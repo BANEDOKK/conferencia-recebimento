@@ -2,6 +2,7 @@
 //  SCRIPT PRINCIPAL – Conferência Eletro (Supabase)
 //  CAMPO DE SENHA: senha_hash
 //  COM CAMPO MODELO POR ITEM (OPCIONAL)
+//  COM EXPORTAÇÃO CSV
 // ============================================================
 
 // --- Estado global ---
@@ -905,5 +906,94 @@ async function carregarTotalProdutos() {
         .select('*', { count: 'exact', head: true });
     if (!error) {
         $('total-produtos').textContent = count;
+    }
+}
+
+// ============================================================
+//  EXPORTAR CSV
+// ============================================================
+$('btn-exportar-csv').addEventListener('click', exportarCSV);
+
+async function exportarCSV() {
+    const btn = $('btn-exportar-csv');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span> Exportando...';
+
+    try {
+        // Buscar todos os recebimentos
+        const { data: recebimentos, error: err1 } = await supabase
+            .from('recebimentos')
+            .select('*')
+            .order('data_registro', { ascending: false });
+
+        if (err1) throw err1;
+
+        if (!recebimentos || recebimentos.length === 0) {
+            alert('Nenhum recebimento para exportar.');
+            btn.disabled = false;
+            btn.innerHTML = '📥 Exportar CSV';
+            return;
+        }
+
+        // Buscar todos os itens
+        const { data: todosItens, error: err2 } = await supabase
+            .from('itens_recebimento')
+            .select('*')
+            .order('recebimento_id');
+
+        if (err2) throw err2;
+
+        // Criar mapa de itens por recebimento
+        const itensPorRecebimento = {};
+        todosItens.forEach(item => {
+            if (!itensPorRecebimento[item.recebimento_id]) {
+                itensPorRecebimento[item.recebimento_id] = [];
+            }
+            itensPorRecebimento[item.recebimento_id].push(item);
+        });
+
+        // Construir CSV
+        let csv = '\uFEFF'; // BOM para Excel
+        csv += 'ID;Loja;Conferente;Data;Item;Codigo;PLU;Quantidade;Unidade;Modelo\n';
+
+        recebimentos.forEach(rec => {
+            const itens = itensPorRecebimento[rec.id] || [];
+            const dataFormatada = new Date(rec.data_registro).toLocaleString('pt-BR');
+            const criador = rec.criado_por || 'N/A';
+
+            if (itens.length === 0) {
+                csv += `${rec.id};${rec.fornecedor};${criador};${dataFormatada};;;0;;\n`;
+            } else {
+                itens.forEach((item) => {
+                    csv += `${rec.id};`;
+                    csv += `${rec.fornecedor};`;
+                    csv += `${criador};`;
+                    csv += `${dataFormatada};`;
+                    csv += `${item.descricao || ''};`;
+                    csv += `${item.codacesso || ''};`;
+                    csv += `${item.seqproduto || ''};`;
+                    csv += `${item.qtd_recebida || 0};`;
+                    csv += `${item.unidade || 'UN'};`;
+                    csv += `${item.modelo || ''}\n`;
+                });
+            }
+        });
+
+        // Criar e baixar arquivo
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = `recebimentos_${new Date().toISOString().slice(0,10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+    } catch (err) {
+        alert('Erro ao exportar: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '📥 Exportar CSV';
     }
 }

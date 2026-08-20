@@ -142,7 +142,10 @@
 
     <!-- TELA: LISTA DE RECEBIMENTOS -->
     <section id="page-lista" style="display:none;">
-      <div class="page-titulo">📋 Recebimentos Realizados</div>
+      <div class="page-titulo" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <span>📋 Recebimentos Realizados</span>
+        <button class="btn btn-verde" id="btn-exportar-csv">📥 Exportar CSV</button>
+      </div>
       <div id="lista-recebimentos"></div>
     </section>
 
